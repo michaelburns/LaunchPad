@@ -1,0 +1,34 @@
+﻿@model LaunchPad.ViewModels.PowerShellParam
+
+@using (Html.BeginForm())
+{
+    @Html.AntiForgeryToken()
+
+    <div class="form-horizontal">
+        @Html.ValidationSummary(true, "", new { @class = "text-danger" })
+        @Html.HiddenFor(model => model.Id)
+        @{
+            int i = 0;
+            foreach (var item in Model.PSparams)
+            {
+                if (item.Value == "String")
+                {
+                    <div class="form-group">
+                        @Html.Label("PSparams[" + i + "].Value", item.Key, new { @class = "control-label col-md-2" })
+                        <div class="col-md-10">
+                            @Html.Hidden("PSparams[" + i + "].Key", item.Key)
+                            @Html.TextBox("PSparams[" + i + "].Value", null, new { @class = "form-control text-box single-line", required = true })
+                        </div>
+                    </div>
+                }
+                i++;
+            }
+        }
+
+        <div class="modal-footer">
+            <input type="submit" value="Launch Script" class="btn btn-primary pull-left" />
+            <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+        </div>
+
+    </div>
+            }

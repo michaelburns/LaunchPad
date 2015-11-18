@@ -1,0 +1,61 @@
+﻿@model LaunchPad.ViewModels.PowerShellViewModel
+
+@{
+    ViewBag.Title = "Edit";
+}
+
+<h2>Edit</h2>
+
+
+@using (Html.BeginForm())
+{
+    @Html.AntiForgeryToken()
+    <div class="form-horizontal">
+        <h4><span asp-for="Name"></span></h4>
+        <hr />
+        @Html.ValidationSummary(true, "", new { @class = "text-danger" })
+        <input type="hidden" asp-for="Id" />
+        <input type="hidden" asp-for="Name" />
+
+        <div class="form-group">
+            <div class="col-md-10 col-md-push-1">
+                <div id="editor" style="height:250px;display:none;">@Model.Script</div>
+            </div>
+        </div>
+
+        @Html.EditorFor(model => model.Script, new { htmlAttributes = new { @class = "form-control", style = "display:none", rows = "20" } })
+        <textarea asp-for="Script" style="display: none;"></textarea>
+        <div class="form-group">
+            <div class="col-md-offset-2 col-md-10">
+                <input type="submit" value="Save" class="btn btn-default" />
+            </div>
+        </div>
+    </div>
+}
+
+<div>
+    @Html.ActionLink("Back to List", "Index")
+</div>
+
+
+@section Scripts {
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+    <script src="~/lib/ace-builds/src-min/ace.js"></script>
+
+    <script>
+
+        $(document).ready(function () {
+            $("#Name").focus();
+            $("#editor").show();
+        });
+
+        var textarea = $('textarea[name="Script"]').hide();
+        ace.config.set("basePath", "/Scripts/editor/src")
+        var editor = ace.edit("editor");
+        editor.setTheme("ace/theme/sqlserver"); //chrome|clouds|sqlserver
+        editor.getSession().setMode("ace/mode/powershell");
+        editor.getSession().on('change', function () {
+            textarea.val(editor.getSession().getValue());
+        });
+    </script>
+}

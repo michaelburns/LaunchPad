@@ -1,0 +1,16 @@
+﻿@model LaunchPad.Models.Job
+
+<p>Delete</p>
+
+Are you sure you want to cancel this job?
+<br /><br />
+
+<div class="modal-footer">
+    @using (Html.BeginForm())
+    {
+        @Html.AntiForgeryToken()
+        @Html.HiddenFor(model => model.Id)
+        <input type="submit" value="Cancel" class="btn btn-danger pull-left">
+    }
+    <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+</div>
