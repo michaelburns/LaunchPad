@@ -1,19 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
-using AutoMapper;
 using Hangfire;
 using Microsoft.AspNet.Mvc;
 using LaunchPad.DAL;
 using LaunchPad.Models;
 using LaunchPad.Services;
 using LaunchPad.ViewModels;
-
-// For more information on enabling MVC for empty projects, visit http://go.microsoft.com/fwlink/?LinkID=397860
+using Microsoft.AspNet.Authorization;
 
 namespace LaunchPad.Controllers
 {
+    [Authorize]
     public class PowerShellController : Controller
     {
         private IScriptRepository _scriptRepository;
