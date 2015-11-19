@@ -3,8 +3,10 @@
 
 PowerShell Web Portal
 
+Currently using ASP.NET 5 Beta 8
+
 The project is not ready for production environments and should be used for testing only. 
 
-Currently moving project to ASP.NET 5 RC1
+
 
 To get started just clone the repository to Visual Studio and use "dnu restore" in the Package Manager Console.
