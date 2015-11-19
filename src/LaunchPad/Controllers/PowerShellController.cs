@@ -205,13 +205,10 @@ namespace LaunchPad.Controllers
         // JSON GET: PowerShell/GetParams/1
         public JsonResult GetParams(int id)
         {
-            var script = _scriptRepository.GetScriptById(id);
-            if (script == null)
-            {
-                return Json(HttpNotFound());
-            }
+            var scriptName = _scriptRepository.GetScriptById(id).Name;
+            if (scriptName == null){return Json(HttpNotFound());}
 
-            var psParams = ScriptIO.ScriptParams(script.Name) ??
+            var psParams = ScriptIO.ScriptParams(scriptName) ??
                            new Dictionary<string, string> { { "Null", "Null" } };
 
             return Json(psParams);
@@ -278,12 +275,6 @@ namespace LaunchPad.Controllers
             return RedirectToAction("Details", new { id = schedule.Id });
         }
 
-
-        protected override void Dispose(bool disposing)
-        {
-            _scriptRepository.Dispose();
-            base.Dispose(disposing);
-        }
     }
 
     public class Partials : ViewComponent
