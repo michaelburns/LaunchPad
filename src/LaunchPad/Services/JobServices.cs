@@ -16,7 +16,7 @@ using Microsoft.Data.Entity.Infrastructure;
 namespace LaunchPad.Services
 {
     //TODO: Cleanup and  Implement Interface
-    public class JobServices
+    public class JobServices : IDisposable
     {
 
         private IScriptRepository _scriptRepository;
@@ -219,9 +219,9 @@ namespace LaunchPad.Services
                 {
                     if (status == Status.Completed)
                     {
-                        var powerShellMetadata = _scriptRepository.GetScripts().FirstOrDefault(e => e.Id == job.ScriptId);
-                        if (powerShellMetadata != null)
-                            outcome = powerShellMetadata.LastOutput;
+                        var script = _scriptRepository.GetScriptById(job.ScriptId);
+                        if (script != null)
+                            outcome = script.LastOutput;
                     }
                     UpdateJobStatus(job, status, outcome);
                 }
@@ -293,6 +293,12 @@ namespace LaunchPad.Services
                     Value = "Yearly"
                 }
             };
+        }
+
+
+        public void Dispose()
+        {
+            _scriptRepository.Dispose();
         }
     }
 }
