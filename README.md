@@ -3,6 +3,6 @@
 
 PowerShell Web Portal
 
-The project is in a test stage - functionaly works, but it not erady for any production environment. 
+The project is not ready for production environments and should be used for testing only. 
 
 Currently moving project to ASP.NET 5 RC1
