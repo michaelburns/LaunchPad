@@ -12,7 +12,7 @@ using Owin;
 
 namespace LaunchPad.Services
 {
-    using Microsoft.Framework.DependencyInjection;
+    using Microsoft.Extensions.DependencyInjection;
     using AppFunc = Func<IDictionary<string, object>, Task>;
 
     public static class IApplicationBuilderExtensions
