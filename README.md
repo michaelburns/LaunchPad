@@ -1,7 +1,9 @@
 # { Launch-Pad }
 [![npm](https://img.shields.io/npm/l/express.svg)](https://github.com/michaelburns/LaunchPad/blob/master/LICENSE)
 
-#### PowerShell Web Portal
+### PowerShell Web Portal
+##### Automation for Everyone
+--------------
 
 Currently using ASP.NET 5 RC1
 
@@ -19,7 +21,7 @@ To get started just clone the repository to Visual Studio and use "dnu restore" 
 * Ability to leverage parameters and variables in your scripts
 * View results
 
-
+--------------
 #### Screenshots
 
 ##### Scripts Dashboard
@@ -38,6 +40,7 @@ To get started just clone the repository to Visual Studio and use "dnu restore" 
 
 ![Launch-Pad Launch Script with Params](http://i.imgur.com/NcoVMzQ.png)
 
+--------------
 
 
 #### Planned Features
@@ -48,7 +51,7 @@ To get started just clone the repository to Visual Studio and use "dnu restore" 
 * Email alerts on failures
 * Version Control
 
-
+--------------
 
 
 #### Special Thanks To
