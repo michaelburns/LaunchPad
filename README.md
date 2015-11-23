@@ -34,11 +34,16 @@ To get started just clone the repository to Visual Studio and use "dnu restore" 
 
 ##### View Output
 
-![Launch-Pad Launch Script with Params](http://i.imgur.com/xNLBn8E.png)
+![Launch-Pad View Output](http://i.imgur.com/xNLBn8E.png)
 
 ##### Schedule 
 
-![Launch-Pad Launch Script with Params](http://i.imgur.com/NcoVMzQ.png)
+![Launch-Pad Schedule Script with Params](http://i.imgur.com/NcoVMzQ.png)
+
+
+##### Create and Edit Scripts 
+
+![Launch-Pad Create and Edit Scripts](http://i.imgur.com/fp2KRy4.png)
 
 --------------
 
