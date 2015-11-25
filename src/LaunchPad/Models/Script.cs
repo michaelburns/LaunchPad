@@ -15,6 +15,6 @@ namespace LaunchPad.Models
         public string Author { get; set; }
         public string LastOutput { get; set; }
 
-        public ICollection<Job> Jobs { get; set; }
+        public List<Job> Jobs { get; set; }
     }
 }

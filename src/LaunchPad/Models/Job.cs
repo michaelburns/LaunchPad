@@ -38,5 +38,8 @@ namespace LaunchPad.Models
         public JobType JobType { get; set; }
        
         public Status Status { get; set; }
+
+
+        public virtual Script Script{ get; set; }
     }
 }
