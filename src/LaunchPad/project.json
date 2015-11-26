@@ -30,7 +30,7 @@
     "Microsoft.Extensions.Logging.Console": "1.0.0-rc1-final",
     "Microsoft.Extensions.Logging.Debug": "1.0.0-rc1-final",
     "Microsoft.VisualStudio.Web.BrowserLink.Loader": "14.0.0-rc1-final",
-    "System.Management.Automation_PowerShell_3.0": "6.3.9600.17400"
+    "System.Management.Automation.dll": "10.0.10586"
   },
 
   "commands": {
