@@ -16,6 +16,7 @@ The project is not ready for production environments and should be used for test
 #### Get started in three steps:
 - [Install ASP.NET 5 RC1](https://get.asp.net/)  
 - Clone the project to [Visual Studio 2015](https://www.visualstudio.com/en-us/products/visual-studio-community-vs.aspx) or [Visual Studio Code](https://www.visualstudio.com/en-us/products/code-vs.aspx)
+  - There's even a [GitHub extension](https://visualstudio.github.com/)
 - Run the Entity Framework 7 commands from the ./src/LaunchPad directory 
   - ``` dnx ef migrations add InitialDB ```
   - ```dnx ef database update ```
