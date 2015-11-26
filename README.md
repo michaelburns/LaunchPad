@@ -13,7 +13,7 @@ This project is looking for contributors. If you have a feature you'd like to se
 
 The project is not ready for production environments and should be used for testing only. 
 
-Get started in three steps:
+#### Get started in three steps:
 - [Install ASP.NET 5 RC1](https://get.asp.net/)  
 - Clone the project to [Visual Studio 2015](https://www.visualstudio.com/en-us/products/visual-studio-community-vs.aspx) or [Visual Studio Code](https://www.visualstudio.com/en-us/products/code-vs.aspx)
 - Run the Entity Framework 7 commands from the ./src/LaunchPad directory 
