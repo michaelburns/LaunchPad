@@ -7,6 +7,8 @@
 
 Currently using ASP.NET 5 RC1
 
+This project is looking for contributors. If you have a feature you'd like to see implemented or a bug you'd liked fixed, the best and fastest way to make that happen is to implement it and submit it back upstream for consideration. All contributions will be given thorough consideration.
+
 The project is not ready for production environments and should be used for testing only. 
 
 To get started just clone the repository to Visual Studio and use "dnu restore" in the Package Manager Console.
