@@ -1,5 +1,7 @@
 # { Launch-Pad }
-[![npm](https://img.shields.io/npm/l/express.svg)](https://github.com/michaelburns/LaunchPad/blob/master/LICENSE)
+[![npm](https://img.shields.io/npm/l/express.svg)](https://github.com/michaelburns/LaunchPad/blob/master/LICENSE) 
+[![Build status](https://ci.appveyor.com/api/projects/status/u6sr8qluxoyuy0q7?svg=true)](https://ci.appveyor.com/project/michaelburns/launchpad)
+
 
 ### PowerShell Command Center
 ##### Automation for Everyone
