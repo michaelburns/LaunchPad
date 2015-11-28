@@ -38,12 +38,12 @@ namespace LaunchPad.Controllers
         [ValidateAntiForgeryToken]
         public ActionResult Create([Bind("Name,Script")] PowerShellViewModel newScript)
         {
-            var script = ConvertServices.CreateScript(newScript, User.Identity.Name);
-
             if (ScriptIO.ScriptExists(newScript.Name)) //TODO: Ensure this works on ViewModel - Having Issues - 11/16/2015
             {
                 ModelState.AddModelError("Name", "This Name Already Exists");
+                return View(newScript);
             }
+            var script = ConvertServices.CreateScript(newScript, User.Identity.Name);           
             if (TryValidateModel(script))
             {
                 //Write File and Save Metadata
