@@ -75,8 +75,16 @@ namespace LaunchPad.Services
         [AutomaticRetry(Attempts = 0)]
         public void Run(string name)
         {
+            // Executionpolicy Bypass - Thanks to @ducke
+            // 
+            InitialSessionState initial = InitialSessionState.CreateDefault();
+
+            // Replace PSAuthorizationManager with a null manager
+            // which ignores execution policy 
+            initial.AuthorizationManager = new AuthorizationManager("Microsoft.PowerShell");
+
             //Create Runspace
-            var runspace = RunspaceFactory.CreateRunspace();
+            var runspace = RunspaceFactory.CreateRunspace(initial);
             runspace.Open();
 
             //Create Pipeline
@@ -98,8 +106,16 @@ namespace LaunchPad.Services
         [AutomaticRetry(Attempts = 0)]
         public void Run(string name, Dictionary<string, string> psParams)
         {
+            // Executionpolicy Bypass - Thanks to @ducke
+            // 
+            InitialSessionState initial = InitialSessionState.CreateDefault();
+
+            // Replace PSAuthorizationManager with a null manager
+            // which ignores execution policy 
+            initial.AuthorizationManager = new AuthorizationManager("Microsoft.PowerShell");
+
             //Create Runspace
-            Runspace runspace = RunspaceFactory.CreateRunspace();
+            var runspace = RunspaceFactory.CreateRunspace(initial);
             runspace.Open();
 
             //Create Pipeline
