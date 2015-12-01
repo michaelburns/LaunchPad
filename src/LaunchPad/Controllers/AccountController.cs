@@ -56,6 +56,10 @@ namespace LaunchPad.Controllers
         public async Task<IActionResult> Login(LoginViewModel model, string returnUrl = null)
         {
             EnsureDatabaseCreated(_applicationDbContext);
+
+            //Ensure Admin Account Exists:
+            await GetAdminAsync();
+
             ViewData["ReturnUrl"] = returnUrl;
             if (ModelState.IsValid)
             {
@@ -88,7 +92,6 @@ namespace LaunchPad.Controllers
         //
         // GET: /Account/Register
         [HttpGet]
-        [AllowAnonymous]
         public IActionResult Register()
         {
             return View();
@@ -97,7 +100,6 @@ namespace LaunchPad.Controllers
         //
         // POST: /Account/Register
         [HttpPost]
-        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Register(RegisterViewModel model)
         {
@@ -114,8 +116,7 @@ namespace LaunchPad.Controllers
                     //var callbackUrl = Url.Action("ConfirmEmail", "Account", new { userId = user.Id, code = code }, protocol: HttpContext.Request.Scheme);
                     //await _emailSender.SendEmailAsync(model.Email, "Confirm your account",
                     //    "Please confirm your account by clicking this link: <a href=\"" + callbackUrl + "\">link</a>");
-                    await _signInManager.SignInAsync(user, isPersistent: false);
-                    return RedirectToAction(nameof(HomeController.Index), "Home");
+                    return RedirectToAction(nameof(AccountController.Index), "Account");
                 }
                 AddErrors(result);
             }
@@ -133,6 +134,43 @@ namespace LaunchPad.Controllers
             await _signInManager.SignOutAsync();
             return RedirectToAction(nameof(HomeController.Index), "Home");
         }
+
+
+
+        #region Account Management
+
+        // GET: Index
+        public IActionResult Index()
+        {
+            return View(_userManager.Users.ToList());
+        }
+
+        // GET: Admin/Edit/5
+        public async Task<IActionResult> Edit(string id)
+        {
+            if (id == null)
+            {
+                return HttpNotFound();
+            }
+
+            var user = await _userManager.FindByIdAsync(id);
+            if (user == null)
+            {
+                return HttpNotFound();
+            }
+            return View(user);
+        }
+
+        // POST: Admin/Edit/5
+        //[HttpPost]
+        //[ValidateAntiForgeryToken]
+        //public IActionResult Edit(ApplicationUser applicationUser)
+        //{
+        //    return View(applicationUser);
+        //}
+
+        #endregion
+
 
         //
         // POST: /Account/ExternalLogin
@@ -445,6 +483,18 @@ namespace LaunchPad.Controllers
                 _databaseChecked = true;
                 context.Database.Migrate();
             }
+
+        }
+
+        private async Task<ApplicationUser> GetAdminAsync()
+        {
+            var admin = await _userManager.FindByNameAsync("admin");
+            if (admin == null)
+            {
+                admin = new ApplicationUser {UserName = "admin", Email = "admin@noreply.com"};
+                var result = await _userManager.CreateAsync(admin, "Admin1234!");
+            }
+            return admin;
         }
 
         private void AddErrors(IdentityResult result)

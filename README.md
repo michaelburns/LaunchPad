@@ -20,6 +20,10 @@ The project is not ready for production environments and should be used for test
 - Run the Entity Framework 7 commands from the ./src/LaunchPad directory 
   - ``` dnx ef migrations add InitialDB ```
   - ```dnx ef database update ```
+  
+##### Default Admin Account:
+Username: admin  
+Password: Admin1234!
 
 
 #### Key Features
