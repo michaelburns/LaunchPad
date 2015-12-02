@@ -92,6 +92,7 @@ namespace LaunchPad.Controllers
         //
         // GET: /Account/Register
         [HttpGet]
+        [Authorize("ManageUsers")]
         public IActionResult Register()
         {
             return View();
@@ -101,6 +102,7 @@ namespace LaunchPad.Controllers
         // POST: /Account/Register
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [Authorize("ManageUsers")]
         public async Task<IActionResult> Register(RegisterViewModel model)
         {
             EnsureDatabaseCreated(_applicationDbContext);
@@ -140,12 +142,14 @@ namespace LaunchPad.Controllers
         #region Account Management
 
         // GET: Index
+        [Authorize("ManageUsers")]
         public IActionResult Index()
         {
             return View(_userManager.Users.ToList());
         }
 
         // GET: Admin/Edit/5
+        [Authorize("ManageUsers")]
         public async Task<IActionResult> Edit(string id)
         {
             if (id == null)
@@ -168,6 +172,40 @@ namespace LaunchPad.Controllers
         //{
         //    return View(applicationUser);
         //}
+
+        // GET: Account/Delete/5
+        [ActionName("Delete")]
+        [Authorize("ManageUsers")]
+        public async Task<IActionResult> Delete(string id)
+        {
+            var user = await _userManager.FindByIdAsync(id);
+            if (user == null)
+            {
+                return HttpNotFound();
+            }
+
+            return View(user);
+        }
+
+        // POST: Account/Delete/5
+        [HttpPost, ActionName("Delete")]
+        [Authorize("ManageUsers")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteConfirmed(string id)
+        {
+            var user = await _userManager.FindByIdAsync(id);
+            if (user == null)
+            {
+                return HttpNotFound();
+            }
+
+            var result = await _userManager.DeleteAsync(user);
+            if (result.Succeeded)
+            {
+                return RedirectToAction("Index");
+            }
+            return View(id);
+        }
 
         #endregion
 
@@ -493,6 +531,7 @@ namespace LaunchPad.Controllers
             {
                 admin = new ApplicationUser {UserName = "admin", Email = "admin@noreply.com"};
                 var result = await _userManager.CreateAsync(admin, "Admin1234!");
+                await _userManager.AddClaimAsync(admin, new Claim("ManageUsers", "Allowed"));
             }
             return admin;
         }

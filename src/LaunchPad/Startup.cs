@@ -75,6 +75,16 @@ namespace LaunchPad
             services.AddTransient<IEmailSender, AuthMessageSender>();
             services.AddTransient<ISmsSender, AuthMessageSender>();
 
+            // Configure Auth
+            services.AddAuthorization(options =>
+            {
+                options.AddPolicy(
+                    "ManageUsers",
+                    authBuilder => {
+                        authBuilder.RequireClaim("ManageUsers", "Allowed");
+                    });
+            });
+
         }
 
         // Configure is called after ConfigureServices is called.

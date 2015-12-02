@@ -7,6 +7,12 @@
             <li>
                 <a asp-controller="Manage" asp-action="Index" title="Manage">Hello @User.GetUserName()!</a>
             </li>
+            @if (User.HasClaim("ManageUsers", "Allowed"))
+            {
+                <li>
+                    <a asp-controller="Account" asp-action="Index" title="Manage Users">Manage Users</a>
+                </li>
+            }
             <li><a href="javascript:document.getElementById('logoutForm').submit()">Log off</a></li>
         </ul>
     </form>
@@ -14,7 +20,6 @@
 else
 {
     <ul class="nav navbar-nav navbar-right">
-        <li><a asp-controller="Account" asp-action="Register">Register</a></li>
         <li><a asp-controller="Account" asp-action="Login">Log in</a></li>
     </ul>
 }
