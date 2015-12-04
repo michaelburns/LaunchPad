@@ -18,6 +18,7 @@ namespace LaunchPad.Controllers
     public class AccountController : Controller
     {
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly IdentityManager _identityManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IEmailSender _emailSender;
         private readonly ISmsSender _smsSender;
@@ -36,6 +37,7 @@ namespace LaunchPad.Controllers
             _emailSender = emailSender;
             _smsSender = smsSender;
             _applicationDbContext = applicationDbContext;
+            _identityManager = new IdentityManager(_userManager); //TODO: Move to DI
         }
 
         //
@@ -88,44 +90,7 @@ namespace LaunchPad.Controllers
             // If we got this far, something failed, redisplay form
             return View(model);
         }
-
-        //
-        // GET: /Account/Register
-        [HttpGet]
-        [Authorize("ManageUsers")]
-        public IActionResult Register()
-        {
-            return View();
-        }
-
-        //
-        // POST: /Account/Register
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        [Authorize("ManageUsers")]
-        public async Task<IActionResult> Register(RegisterViewModel model)
-        {
-            EnsureDatabaseCreated(_applicationDbContext);
-            if (ModelState.IsValid)
-            {
-                var user = new ApplicationUser { UserName = model.UserName, Email = model.Email };
-                var result = await _userManager.CreateAsync(user, model.Password);
-                if (result.Succeeded)
-                {
-                    // For more information on how to enable account confirmation and password reset please visit http://go.microsoft.com/fwlink/?LinkID=532713
-                    // Send an email with this link
-                    //var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-                    //var callbackUrl = Url.Action("ConfirmEmail", "Account", new { userId = user.Id, code = code }, protocol: HttpContext.Request.Scheme);
-                    //await _emailSender.SendEmailAsync(model.Email, "Confirm your account",
-                    //    "Please confirm your account by clicking this link: <a href=\"" + callbackUrl + "\">link</a>");
-                    return RedirectToAction(nameof(AccountController.Index), "Account");
-                }
-                AddErrors(result);
-            }
-
-            // If we got this far, something failed, redisplay form
-            return View(model);
-        }
+       
 
         //
         // POST: /Account/LogOff
@@ -141,15 +106,62 @@ namespace LaunchPad.Controllers
 
         #region Account Management
 
+        //
+        // GET: /Account/Register
+        [HttpGet]
+        [Authorize(Roles = "User Admin")]
+        public async Task<IActionResult> Register()
+        {
+            ViewBag.SelectedRoles = await _identityManager.GetRoles();
+            return View();
+        }
+
+        //
+        // POST: /Account/Register
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize(Roles = "User Admin")]
+        public async Task<IActionResult> Register(RegisterViewModel model)
+        {
+            EnsureDatabaseCreated(_applicationDbContext);
+            if (ModelState.IsValid)
+            {
+                var user = new ApplicationUser { UserName = model.UserName, Email = model.Email };
+                var result = await _userManager.CreateAsync(user, model.Password);
+                if (result.Succeeded)
+                {
+                    if (model.SelectedRoles != null)
+                    {
+                        foreach (var role in model.SelectedRoles)
+                        {
+                            await _identityManager.AddUserToRole(user.Id, role);
+                        }
+                    }
+                  
+                    // For more information on how to enable account confirmation and password reset please visit http://go.microsoft.com/fwlink/?LinkID=532713
+                    // Send an email with this link
+                    //var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                    //var callbackUrl = Url.Action("ConfirmEmail", "Account", new { userId = user.Id, code = code }, protocol: HttpContext.Request.Scheme);
+                    //await _emailSender.SendEmailAsync(model.Email, "Confirm your account",
+                    //    "Please confirm your account by clicking this link: <a href=\"" + callbackUrl + "\">link</a>");
+                    return RedirectToAction(nameof(AccountController.Index), "Account");
+                }
+                AddErrors(result);
+            }
+
+            // If we got this far, something failed, redisplay form
+            return View(model);
+        }
+
         // GET: Index
-        [Authorize("ManageUsers")]
+        [Authorize(Roles = "User Admin")]
         public IActionResult Index()
         {
             return View(_userManager.Users.ToList());
         }
 
-        // GET: Admin/Edit/5
-        [Authorize("ManageUsers")]
+        // GET: Edit
+        [Authorize(Roles = "User Admin")]
         public async Task<IActionResult> Edit(string id)
         {
             if (id == null)
@@ -157,25 +169,60 @@ namespace LaunchPad.Controllers
                 return HttpNotFound();
             }
 
-            var user = await _userManager.FindByIdAsync(id);
+            var user = _userManager.Users.Include(u => u.Roles).FirstOrDefault(u => u.Id == id);
             if (user == null)
             {
                 return HttpNotFound();
             }
-            return View(user);
+
+            var userViewModel = new EditUserViewModel()
+            {
+                User = user,
+                SelectedRoles = from role in user.Roles
+                                select role.RoleId
+            };
+
+            ViewBag.AllRoles = await _identityManager.GetRoles();
+
+            return View(userViewModel);
         }
 
-        // POST: Admin/Edit/5
-        //[HttpPost]
-        //[ValidateAntiForgeryToken]
-        //public IActionResult Edit(ApplicationUser applicationUser)
-        //{
-        //    return View(applicationUser);
-        //}
+        //POST: Edit
+        [HttpPost]
+        [Authorize(Roles = "User Admin")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(EditUserViewModel editedUser)
+        {
+            //Sync
+            var user = await _userManager.FindByIdAsync(editedUser.User.Id);
+            user.UserName = editedUser.User.UserName;
+            user.Email = editedUser.User.Email;
+            user.PhoneNumber = editedUser.User.PhoneNumber;
+
+            //Update User
+            var result = await _userManager.UpdateAsync(user);
+            if (result.Succeeded)
+            {
+                if(await _identityManager.ClearUserRoles(user.Id))
+                {
+                    if (editedUser.SelectedRoles != null)
+                    {
+                        foreach (var role in editedUser.SelectedRoles)
+                        {
+                            await _identityManager.AddUserToRole(user.Id, role);
+                        }
+                    }
+                }
+                
+                return RedirectToAction(nameof(AccountController.Index), "Account");
+            }
+
+            return View(editedUser);
+        }
 
         // GET: Account/Delete/5
         [ActionName("Delete")]
-        [Authorize("ManageUsers")]
+        [Authorize(Roles = "User Admin")]
         public async Task<IActionResult> Delete(string id)
         {
             var user = await _userManager.FindByIdAsync(id);
@@ -189,7 +236,7 @@ namespace LaunchPad.Controllers
 
         // POST: Account/Delete/5
         [HttpPost, ActionName("Delete")]
-        [Authorize("ManageUsers")]
+        [Authorize(Roles = "User Admin")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(string id)
         {
@@ -529,9 +576,15 @@ namespace LaunchPad.Controllers
             var admin = await _userManager.FindByNameAsync("admin");
             if (admin == null)
             {
-                admin = new ApplicationUser {UserName = "admin", Email = "admin@noreply.com"};
-                var result = await _userManager.CreateAsync(admin, "Admin1234!");
-                await _userManager.AddClaimAsync(admin, new Claim("ManageUsers", "Allowed"));
+                //Create Default Roles
+                await _identityManager.CreateRole("User Admin");
+                await _identityManager.CreateRole("Script Author");
+                await _identityManager.CreateRole("Script Scheduler");
+
+                //Create Admin and Add to User Admin Role
+                admin = new ApplicationUser { UserName = "admin", Email = "admin@noreply.com" };
+                await _identityManager.CreateUser(admin, "Admin1234!");
+                await _identityManager.AddUserToRole(admin.Id, "User Admin");
             }
             return admin;
         }

@@ -1,4 +1,4 @@
-@model LaunchPad.Models.ApplicationUser
+@model EditUserViewModel
 
 @{
     ViewData["Title"] = "Edit";
@@ -8,43 +8,50 @@
 
 <form asp-action="Edit">
     <div class="form-horizontal">
-        <h4>@Html.DisplayFor(model => model.UserName)</h4>
+        <h4>@Html.DisplayFor(model => model.User.UserName)</h4>
         <hr />
         <div asp-validation-summary="ValidationSummary.ModelOnly" class="text-danger"></div>
-        <input type="hidden" asp-for="Id"/>
+        <input type="hidden" asp-for="User.Id" />
 
 
         <div class="form-group">
-            <label asp-for="UserName" class="col-md-2 control-label"></label>
+            <label asp-for="User.UserName" class="col-md-2 control-label"></label>
             <div class="col-md-10">
-                <input asp-for="UserName" class="form-control" />
-                <span asp-validation-for="UserName" class="text-danger" />
+                <input asp-for="User.UserName" class="form-control" />
+                <span asp-validation-for="User.UserName" class="text-danger" />
             </div>
         </div>
 
         <div class="form-group">
-            <label asp-for="Email" class="col-md-2 control-label"></label>
+            <label asp-for="User.Email" class="col-md-2 control-label"></label>
             <div class="col-md-10">
-                <input asp-for="Email" class="form-control"/>
-                <span asp-validation-for="Email" class="text-danger" />
+                <input asp-for="User.Email" class="form-control" />
+                <span asp-validation-for="User.Email" class="text-danger" />
             </div>
         </div>
 
 
         <div class="form-group">
-            <label asp-for="PhoneNumber" class="col-md-2 control-label">Phone Number</label>
+            <label asp-for="User.PhoneNumber" class="col-md-2 control-label">Phone Number</label>
             <div class="col-md-10">
-                <input asp-for="PhoneNumber" class="form-control" />
-                <span asp-validation-for="PhoneNumber" class="text-danger" />
+                <input asp-for="User.PhoneNumber" class="form-control" />
+                <span asp-validation-for="User.PhoneNumber" class="text-danger" />
             </div>
         </div>
 
         <div class="form-group">
             <div class="col-md-offset-2 col-md-10">
                 <div class="checkbox">
-                    <input asp-for="LockoutEnabled"/>
-                    <label asp-for="LockoutEnabled">Enable Lockout</label>
+                    <input asp-for="User.LockoutEnabled" />
+                    <label asp-for="User.LockoutEnabled">Enable Lockout</label>
                 </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label asp-for="SelectedRoles" class="col-md-2 control-label"></label>
+            <div class="col-md-10">
+                @Html.ListBoxFor(model => model.SelectedRoles, new SelectList(ViewBag.AllRoles, "Id", "Name"), new { @class = "multiselect" })
             </div>
         </div>
 
@@ -62,7 +69,14 @@
 </div>
 
 @section Scripts {
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
-    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+    <script type="text/javascript">
+        $(document).ready(function () {
+            $('.multiselect').multiselect({
+                maxHeight: 200,
+                enableFiltering: true,
+                enableCaseInsensitiveFiltering: true
+            });
+        });
+    </script>
 }

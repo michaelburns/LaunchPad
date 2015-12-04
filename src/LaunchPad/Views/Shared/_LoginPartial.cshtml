@@ -7,7 +7,7 @@
             <li>
                 <a asp-controller="Manage" asp-action="Index" title="Manage">Hello @User.GetUserName()!</a>
             </li>
-            @if (User.HasClaim("ManageUsers", "Allowed"))
+            @if (User.IsInRole("User Admin"))
             {
                 <li>
                     <a asp-controller="Account" asp-action="Index" title="Manage Users">Manage Users</a>

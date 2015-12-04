@@ -1,12 +1,12 @@
 ﻿@model RegisterViewModel
 @{
-    ViewData["Title"] = "Register";
+    ViewData["Title"] = "Create User";
 }
 
-<h2>@ViewData["Title"].</h2>
+<h2>@ViewData["Title"]</h2>
 
 <form asp-controller="Account" asp-action="Register" method="post" class="form-horizontal" role="form">
-    <h4>Create a new account.</h4>
+    <h4>Create a new user.</h4>
     <hr />
     <div asp-validation-summary="ValidationSummary.All" class="text-danger"></div>
     <div class="form-group">
@@ -38,12 +38,29 @@
         </div>
     </div>
     <div class="form-group">
+        <label asp-for="SelectedRoles" class="col-md-2 control-label"></label>
+        <div class="col-md-10">
+            @Html.DropDownListFor(model => model.SelectedRoles, new SelectList(ViewBag.SelectedRoles, "Id", "Name"), new { @class = "multiselect form-control", multiple = "multiple" })
+        </div>
+    </div>
+
+    <div class="form-group">
         <div class="col-md-offset-2 col-md-10">
-            <button type="submit" class="btn btn-default">Register</button>
+            <button type="submit" class="btn btn-default">Create</button>
         </div>
     </div>
 </form>
 
 @section Scripts {
     @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+
+    <script type="text/javascript">
+        $(document).ready(function () {
+            $('.multiselect').multiselect({
+                maxHeight: 200,
+                enableFiltering: true,
+                enableCaseInsensitiveFiltering: true
+            });
+        });
+    </script>
 }

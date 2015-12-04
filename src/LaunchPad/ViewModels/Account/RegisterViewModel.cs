@@ -28,5 +28,8 @@ namespace LaunchPad.ViewModels.Account
         [Display(Name = "Confirm password")]
         [Compare("Password", ErrorMessage = "The password and confirmation password do not match.")]
         public string ConfirmPassword { get; set; }
+
+        [Display(Name="Roles")]
+        public IEnumerable<string> SelectedRoles { get; set; }
     }
 }

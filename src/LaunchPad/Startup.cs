@@ -75,15 +75,15 @@ namespace LaunchPad
             services.AddTransient<IEmailSender, AuthMessageSender>();
             services.AddTransient<ISmsSender, AuthMessageSender>();
 
-            // Configure Auth
-            services.AddAuthorization(options =>
-            {
-                options.AddPolicy(
-                    "ManageUsers",
-                    authBuilder => {
-                        authBuilder.RequireClaim("ManageUsers", "Allowed");
-                    });
-            });
+            // Configure Auth TODO: When Adding Claims
+            //services.AddAuthorization(options =>
+            //{
+            //    options.AddPolicy(
+            //        "EditScripts",
+            //        authBuilder => {
+            //            authBuilder.RequireClaim("EditScripts", "Allowed");
+            //        });
+            //});
 
         }
 
