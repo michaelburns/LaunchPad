@@ -28,6 +28,7 @@ Password: Admin1234!
 
 #### Key Features
 * Secure central location for all your scripts
+* User/Role Management
 * Auditing - who ran what when
 * Syntax highlighting editor
 * Launch scripts from the web
@@ -63,9 +64,8 @@ Password: Admin1234!
 
 
 #### Planned Features
-* Define custom end users groups (Accounting, Business Departments)
-* Publish scripts to end users
-* Dashboard for non-scripting end users to launch/schedule scripts they need
+* Define custom end user roles (Exchange, Business Departments)
+* Publish scripts to dashboard for end users to launch/schedule scripts they need
 * Export and/or email script results
 * Email alerts on failures
 * Version Control
