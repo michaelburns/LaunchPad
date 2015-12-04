@@ -584,7 +584,8 @@ namespace LaunchPad.Controllers
                 //Create Admin and Add to User Admin Role
                 admin = new ApplicationUser { UserName = "admin", Email = "admin@noreply.com" };
                 await _identityManager.CreateUser(admin, "Admin1234!");
-                await _identityManager.AddUserToRole(admin.Id, "User Admin");
+                var adminRoleId = await _identityManager.GetRoleIdByName("User Admin");
+                await _identityManager.AddUserToRole(admin.Id, adminRoleId);
             }
             return admin;
         }

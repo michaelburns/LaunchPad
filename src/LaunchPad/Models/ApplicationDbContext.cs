@@ -55,6 +55,15 @@ namespace LaunchPad.Models
             return idResult.Succeeded;
         }
 
+        public async Task<string> GetRoleIdByName(string name)
+        {
+            var roles = new List<IRoleValidator<IdentityRole>>();
+            var rm = new RoleManager<IdentityRole>(
+                new RoleStore<IdentityRole>(new ApplicationDbContext()), roles, null, null, null, null);
+            var role = await rm.FindByNameAsync(name);
+            return role.Id;
+        }
+
         public async Task<IEnumerable<IdentityRole>> GetRoles()
         {
             var roles = new List<IRoleValidator<IdentityRole>>();
