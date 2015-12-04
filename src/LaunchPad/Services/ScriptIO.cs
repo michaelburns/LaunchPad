@@ -8,11 +8,9 @@ namespace LaunchPad.Services
 {
     public class ScriptIO
     {
-        //TODO: Move to appsettings.json
+
         static string folderLocation = Startup.Configuration["PowerShellScripts:FolderLocation"];
         static string extention = Startup.Configuration["PowerShellScripts:FileExtention"];
-        //static string repoLocation = @"c:\Alchemy\Scripts";
-        //static string extention = ".ps1";
 
         public static bool Write(string name, string text)
         {

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -158,6 +159,11 @@ namespace LaunchPad
             GlobalConfiguration.Configuration.UseSqlServerStorage(Configuration["Data:DefaultConnection:ConnectionString"]);
             app.UseHangfireDashboard("/PowerShell/Jobs");
             app.UseHangfireServer();
+
+            // LAUNCH-PAD SCRIPTS SETUP
+            // Creates directory in the specified folderLocation unless it already exist.
+            // https://msdn.microsoft.com/en-us/library/54a0at6s.aspx
+            Directory.CreateDirectory(Configuration["PowerShellScripts:FolderLocation"]);
 
         }
     }
