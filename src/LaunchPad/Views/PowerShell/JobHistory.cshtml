@@ -26,7 +26,7 @@
             <td>
                 @if (item.Status == Status.Failed)
                 {
-                    <a tabindex="0" class="btn btn-xs btn-danger" role="button" data-toggle="popover" data-trigger="hover" data-placement='top' title="An exception occurred during performance of the job." data-content="@item.Outcome">@Html.DisplayFor(modelItem => item.Status)</a>
+                    <a tabindex="0" job-id="@item.Id"  action="JobDetails" class="jobModalButton btn btn-xs btn-danger" role="button" data-toggle="popover" data-trigger="hover" data-placement='top' title="An exception occurred during performance of the job." data-content="@item.Outcome">@Html.DisplayFor(modelItem => item.Status)</a>
                 }
                 else if (item.Status == Status.Scheduled)
                 {
