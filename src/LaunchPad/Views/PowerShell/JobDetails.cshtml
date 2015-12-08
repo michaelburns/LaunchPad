@@ -20,5 +20,11 @@
     });
     editor.setHighlightActiveLine(false);
     editor.setTheme("ace/theme/tomorrow_night_blue"); //chrome|clouds|sqlserver
-    editor.getSession().setMode("ace/mode/powershell");
+    
+    @if (Model.Status == Status.Completed)
+    {
+        //Only uses PowerShell mode when job has completed
+        @:editor.getSession().setMode("ace/mode/powershell");
+    }
+
 </script>
