@@ -23,7 +23,7 @@ namespace LaunchPad.Models
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            optionsBuilder.UseSqlite(Startup.Configuration["Data:DefaultConnection:ConnectionString"]);
+            optionsBuilder.UseSqlServer(Startup.Configuration["Data:DefaultConnection:ConnectionString"]);
         }
     }
 
