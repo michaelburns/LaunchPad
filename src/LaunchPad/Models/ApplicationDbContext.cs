@@ -23,7 +23,7 @@ namespace LaunchPad.Models
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            optionsBuilder.UseSqlServer(@"Server=(localdb)\mssqllocaldb;Database=aspnet5-LaunchPad-ee4b6196-8343-4033-a96b-98a7553fe001;Trusted_Connection=True;MultipleActiveResultSets=true; MultipleActiveResultSets=true;");
+            optionsBuilder.UseSqlite(Startup.Configuration["Data:DefaultConnection:ConnectionString"]);
         }
     }
 
