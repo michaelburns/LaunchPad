@@ -15,7 +15,7 @@ This project is looking for contributors. If you have a feature you'd like to se
 The project is not ready for production environments and should be used for testing only. 
 
 #### Get started with v0.0.1-alpha
-- [Install Launch-Pad](https://github.com/michaelburns/LaunchPad/releases/download/v0.0.1-alpha/launchpad.exe)
+- [Install Launch-Pad](https://github.com/michaelburns/LaunchPad/releases/download/v0.0.1-alpha/launch-pad.exe)
   - [Release Notes](https://github.com/michaelburns/LaunchPad/releases/tag/v0.0.1-alpha)
 
 
