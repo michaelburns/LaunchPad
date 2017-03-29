@@ -1,0 +1,68 @@
+@model LaunchPad.ViewModels.PowerShellViewModel
+
+@{
+    ViewBag.Title = "Create";
+}
+
+<h2>Create</h2>
+
+
+@using (Html.BeginForm())
+{
+    @Html.AntiForgeryToken()
+
+    <div class="form-horizontal">
+        <h4>New PowerShell Script</h4>
+        <hr />
+        @Html.ValidationSummary(true, "", new { @class = "text-danger" })
+        <div class="form-group">
+            @Html.LabelFor(model => model.Name, htmlAttributes: new { @class = "control-label col-md-2" })
+            <div class="col-md-10">
+                @Html.EditorFor(model => model.Name, new { htmlAttributes = new { @class = "form-control" } })
+                <span asp-validation-for="Name"></span>
+            </div>
+        </div>
+
+
+        <div class="form-group">
+            @*@Html.LabelFor(model => model.Script, htmlAttributes: new { @class = "control-label col-md-2" })*@
+            <div class="col-md-10 col-md-push-1">
+                <div id="editor" style="height:250px;"></div>
+                @Html.ValidationMessageFor(model => model.Script, "", new { @class = "text-danger" })
+            </div>
+        </div>
+
+        @Html.EditorFor(model => model.Script, new { htmlAttributes = new { @class = "form-control", style = "display:none", rows = "20" } })
+        <div class="form-group">
+            <div class="col-md-offset-2 col-md-10">
+                <input type="submit" value="Create" class="btn btn-default" />
+            </div>
+        </div>
+    </div>
+}
+
+
+
+<div>
+    @Html.ActionLink("Back to List", "Index")
+</div>
+
+@section Scripts {
+    @*@{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }*@
+    <script src="~/lib/ace-builds/src-min/ace.js"></script>
+    <script>
+        $(document).ready(function () {
+            $("#Name").focus();
+        });
+
+        var textarea = $('textarea[name="Script"]').hide();
+        ace.config.set("basePath", "/Scripts/editor/src")
+        var editor = ace.edit("editor");
+        editor.setTheme("ace/theme/sqlserver"); //chrome|clouds|sqlserver
+        editor.getSession().setMode("ace/mode/powershell");
+        editor.getSession().setValue(textarea.val());
+        editor.getSession().on('change', function () {
+            textarea.val(editor.getSession().getValue());
+        });
+    </script>
+}

@@ -3,3 +3,6 @@
 ################################################################################
 
 /LaunchPad/wwwroot/lib
+/LaunchPad/bin/Debug/net452/win7-x86
+/LaunchPad/obj
+/LaunchPad/Data/Migrations

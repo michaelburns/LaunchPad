@@ -1,0 +1,37 @@
+﻿@model IEnumerable<LaunchPad.Models.Job>
+<br />
+<table class="table">
+    <tr>
+        <th>
+            @Html.DisplayNameFor(model => model.UserName)
+        </th>
+        <th>
+            @Html.DisplayNameFor(model => model.Date)
+        </th>
+        <th>
+            Recurring
+        </th>
+        <th>
+            @Html.DisplayNameFor(model => model.Status)
+        </th>
+    </tr>
+
+    @foreach (var item in Model)
+    {
+        <tr>
+            <td>
+                @Html.DisplayFor(modelItem => item.UserName)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.Date)
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.Outcome)
+            </td>
+            <td>
+                <a tabindex="0" job-id="@item.Id" action="CancelJob" class="jobModalButton btn btn-xs btn-warning">@Html.DisplayFor(modelItem => item.JobType)</a>
+            </td>
+        </tr>
+    }
+
+</table>

@@ -1,0 +1,172 @@
+@model LaunchPad.ViewModels.PowerShellViewModel
+
+@{
+    ViewBag.Title = Model.Name;
+}
+
+<h2></h2>
+
+<div class="form-horizontal">
+    <h4>
+        @Html.DisplayFor(model => model.Name)
+    </h4>
+    <div class="pull-right">
+        @Html.ActionLink("Edit", "Edit", new { id = Model.Id }) |
+        @Html.ActionLink("Delete", "Delete", new { id = Model.Id })
+    </div>
+
+
+    <hr />
+
+
+    <div class="form-group">
+        @*@Html.LabelFor(model => model.Script, htmlAttributes: new { @class = "control-label col-md-2" })*@
+        <div class="col-md-10 col-md-push-1">
+            <div id="editor" style="height:250px;display:none;">@Model.Script</div>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <div class="col-md-10 col-md-push-1">
+
+            <form id="scriptForm" asp-action="Run" method="post" asp-route-id="@Model.Id">
+                <a tabindex="0" id="LaunchScript" script-id="@Model.Id" action="launch" class="btn btn-primary">Launch Script</a>
+                <a tabindex="0" job-id="@Model.Id" action="schedule" class="jobModalButton btn btn-warning">Schedule</a>
+            </form>
+
+            @*@using (Html.BeginForm("Run", "PowerShell", new { id = Model.Id }, FormMethod.Post, new { id = "scriptForm" }))
+            {
+              
+            }*@
+
+        </div>
+    </div>
+</div>
+
+
+
+<p>
+    @Html.ActionLink("Back to List", "Index")
+</p>
+
+<hr />
+
+<ul class="nav nav-tabs">
+    <li class='active'>
+        <a href="#history" data-toggle="tab">Job History</a>
+    </li>
+    <li><a href="#recurring" data-toggle="tab">Recurring Jobs</a></li>
+</ul>
+
+<div class="tab-content">
+    <div class="tab-pane active" id="history">
+        <div id="JobHistory">
+        </div>
+    </div>
+    <div class="tab-pane" id="recurring">
+        @*$('#recurring').load("/PowerShell/RecurringJobs/" + @Model.Id);*@
+        @await Component.InvokeAsync("Partials", Model.Id)
+    </div>
+</div>
+
+
+
+
+
+<!-- Modal -->
+<div class="modal fade" id="jobDetailsModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
+    <div class="modal-dialog" role="document" style="width:900px;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="myModalLabel">Job Details</h4>
+            </div>
+            <div id="jobDetailsModalBody" class="modal-body">
+                ...
+            </div>
+
+        </div>
+    </div>
+</div>
+
+
+
+@section Scripts {
+    <script src="~/lib/ace-builds/src-min/ace.js"></script>
+
+
+    <script>
+        $(document).ready(function() {
+            getJobHistory();
+            $("#editor").show();
+            $("[data-toggle=popover]").popover({ trigger: "hover", container: 'body' });
+        });
+
+        ace.config.set("basePath", "/Scripts/editor/src");
+        var editor = ace.edit("editor");
+        editor.setOptions({
+            readOnly: true
+        });
+        editor.setTheme("ace/theme/sqlserver"); //chrome|clouds|sqlserver
+        editor.getSession().setMode("ace/mode/powershell");
+
+
+        //Modal Goodies
+        $('.jobModalButton').click(function() {
+            var jobId = $(this).attr("job-id");
+            var action = $(this).attr("action");
+            $("#jobDetailsModalBody").load("/PowerShell/" + action + "/" + jobId, function(response, status) {
+                if (status === "success") {
+                    $('#jobDetailsModal').modal('toggle');
+                }
+            });
+        });
+
+        //Used for Reload Click Trigger for Job History Refresh
+        $('#JobHistory').on('click', '.jobModalButton', function() {
+            var jobId = $(this).attr("job-id");
+            var action = $(this).attr("action");
+            $("#jobDetailsModalBody").load("/PowerShell/" + action + "/" + jobId, function(response, status) {
+                if (status === "success") {
+                    $('#jobDetailsModal').modal('toggle');
+                }
+            });
+
+        });
+
+        //Refresh JobHistory
+        function getJobHistory() {
+            $('#JobHistory').load("../JobHistory/" + @Model.Id);
+        };
+        setInterval(function() {
+            getJobHistory();
+        }, 5000);
+
+        //Launch - Check for Params in Script
+        $('#LaunchScript').click(function() {
+            $.ajax({
+                type: 'GET',
+                url: '/Powershell/GetParams/@Model.Id',
+                dataType: 'json',
+                success: function(jsonData) {
+                    var data = JSON.stringify(jsonData);
+                    if (data !== '{"Null":"Null"}') {
+                        $("#jobDetailsModalBody").load('/Powershell/RunWithParams/@Model.Id', function(response, status) {
+                            if (status === "success") {
+                                $('#jobDetailsModal').modal('toggle');
+                            }
+                        });
+                    } else {
+                        $('#scriptForm').submit();
+                    }
+                },
+                error: function() {
+                    alert("Error loading data. Is the Server Up?");
+                }
+            });
+
+        });
+
+
+    </script>
+}
