@@ -243,9 +243,8 @@ namespace LaunchPad.Services
 
         public void UpdateJob(string id, Status status, string outcome = null, string scriptName = null)
         {
-            int jobId;
 
-            if (Int32.TryParse(id, out jobId))
+            if (Int32.TryParse(id, out int jobId))
             {
                 var job = _scriptRepository.GetJobs().FirstOrDefault(e => e.JobId == jobId);
 

@@ -57,10 +57,8 @@ namespace LaunchPad.Services
         public Dictionary<string, string> ScriptParams(string name)
         {
             if (!ScriptExists(name)) return null;
-            Token[] tokens;
-            ParseError[] errors;
             //Abstract Syntax Tree from Script
-            var ast = Parser.ParseInput(Read(name), out tokens, out errors);
+            var ast = Parser.ParseInput(Read(name), out Token[] tokens, out ParseError[] errors);
             if (errors.Length != 0 || ast.ParamBlock == null) return null;
 
             return ast.ParamBlock.Parameters.ToDictionary(param => param.Name.ToString(), param => param.StaticType.Name);

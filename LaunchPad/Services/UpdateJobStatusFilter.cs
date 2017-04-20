@@ -9,24 +9,23 @@ namespace LaunchPad.Services
     {
         public void OnPerformed(PerformedContext filterContext)
         {
-            var _jobServices = new JobServices();
-            _jobServices.UpdateJob(filterContext.BackgroundJob.Id, Status.Completed);
+            var jobServices = new JobServices();
+            jobServices.UpdateJob(filterContext.BackgroundJob.Id, Status.Completed);
         }
 
         public void OnPerforming(PerformingContext filterContext)
         {
-            var _jobServices = new JobServices();
+            var jobServices = new JobServices();
             var scriptName = filterContext.BackgroundJob.Job.Args[0].ToString(); // TODO: test var scriptName = filterContext.BackgroundJob.Job.Method.Name;
-            _jobServices.UpdateJob(filterContext.BackgroundJob.Id, Status.Running, null, scriptName);
+            jobServices.UpdateJob(filterContext.BackgroundJob.Id, Status.Running, null, scriptName);
         }
 
         public void OnStateElection(ElectStateContext context)
         {
-            var _jobServices = new JobServices();
-            var failedState = context.CandidateState as FailedState;
-            if (failedState != null)
+            var jobServices = new JobServices();
+            if (context.CandidateState is FailedState failedState)
             {
-                _jobServices.UpdateJob(context.BackgroundJob.Id, Status.Failed, failedState.Exception.Message);
+                jobServices.UpdateJob(context.BackgroundJob.Id, Status.Failed, failedState.Exception.Message);
             }
         }
     }
