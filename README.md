@@ -1,6 +1,6 @@
 # { Launch-Pad }
 [![npm](https://img.shields.io/npm/l/express.svg)](https://github.com/michaelburns/LaunchPad/blob/master/LICENSE) 
-[![Build status](https://ci.appveyor.com/api/projects/status/u6sr8qluxoyuy0q7?svg=true)](https://ci.appveyor.com/project/michaelburns/launchpad)
+[![Build status](https://ci.appveyor.com/api/projects/status/github/michaelburns/launchpad?branch=master&svg=true)](https://ci.appveyor.com/project/michaelburns/launchpad)
 [![Stories in Ready](https://badge.waffle.io/michaelburns/LaunchPad.png?label=ready&title=Ready)](https://waffle.io/michaelburns/LaunchPad)
 
 
