@@ -34,7 +34,7 @@
                 <ul class="nav navbar-nav">
                     <li><a asp-area="" asp-controller="PowerShell" asp-action="Index">PowerShell</a></li>
                 </ul>
-                @await Html.PartialAsync("_LoginPartial")
+                <p class="nav navbar-text navbar-right">Hello, @User.Identity.Name!</p>
             </div>
         </div>
     </nav>

@@ -10,3 +10,4 @@
 /.vs
 *.user
 /LaunchPad.sln.DotSettings.user
+/LaunchPad/Migrations
