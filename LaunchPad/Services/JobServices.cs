@@ -50,7 +50,7 @@ namespace LaunchPad.Services
         public JobServices()
         {
             var options = new DbContextOptionsBuilder<ApplicationDbContext>();
-            options.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=LaunchPad;Trusted_Connection=True;MultipleActiveResultSets=true"); // This needs to come from cnofiguration. 
+            options.UseSqlServer("Server=localhost;Database=LaunchPad;Trusted_Connection=True;MultipleActiveResultSets=true"); // This needs to come from configuration. 
             _scriptRepository = new PowerShellRepository(new ApplicationDbContext(options.Options));
         }
 
