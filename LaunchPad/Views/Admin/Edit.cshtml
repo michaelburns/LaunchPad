@@ -1,0 +1,43 @@
+﻿@model LaunchPad.Models.User
+
+@{
+    ViewData["Title"] = "Edit";
+}
+
+<div class="row">
+    <h2 class="col-xs-6">Edit User</h2>
+    <h2 class="col-xs-6"><a class="btn btn-danger pull-right" asp-action="Disable" asp-route-id="@Model.Id">Disable</a></h2>
+</div>
+
+
+
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Edit" asp-method="Post">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <input type="hidden" asp-for="Id" />
+            <div class="form-group">
+                <label asp-for="Username" class="control-label"></label>
+                <input asp-for="Username" class="form-control" />
+                <span asp-validation-for="Username" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <label asp-for="Access" class="control-label"></label>
+                <select asp-for="Access"asp-items="Html.GetEnumSelectList<UserType>()"  class="form-control"></select>
+                <span asp-validation-for="Access" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Save" class="btn btn-default" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Back to List</a>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
