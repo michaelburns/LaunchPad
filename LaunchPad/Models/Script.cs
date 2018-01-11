@@ -14,5 +14,7 @@ namespace LaunchPad.Models
 
         // Todo: should this be IEnumerable?
         public List<Job> Jobs { get; set; }
+
+        public Category Category{ get; set; }
     }
 }

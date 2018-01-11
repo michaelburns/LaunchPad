@@ -1,4 +1,5 @@
 ﻿using LaunchPad.Models;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace LaunchPad.Data
@@ -12,5 +13,6 @@ namespace LaunchPad.Data
 
         public DbSet<Script> Scripts { get; set; }
         public DbSet<Job> Jobs { get; set; }
+        public DbSet<User> Users { get; set; }
     }
 }
