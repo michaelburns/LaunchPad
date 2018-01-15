@@ -242,6 +242,7 @@ namespace LaunchPad.Controllers
 
 
         // GET: PowerShell/Delete/1
+        [Authorize(Policy = "Author")]
         public ActionResult Delete(int id)
         {
             var script = _scriptRepository.GetScriptById(id);
@@ -253,6 +254,7 @@ namespace LaunchPad.Controllers
         }
 
         // POST: PowerShell/Delete/1
+        [Authorize(Policy = "Author")]
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public ActionResult DeleteConfirmed(int id)

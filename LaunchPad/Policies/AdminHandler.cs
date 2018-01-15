@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using LaunchPad.Data;
 using LaunchPad.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 
 namespace LaunchPad.Policies
 {
@@ -17,7 +18,7 @@ namespace LaunchPad.Policies
         }    
         protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, AdminRequirement requirement)
         {
-            var user = _context.Users.FirstOrDefault(u => String.Equals(u.Username, context.User.Identity.Name, StringComparison.CurrentCultureIgnoreCase));
+            var user = _context.Users.AsNoTracking().FirstOrDefault(u => String.Equals(u.Username, context.User.Identity.Name, StringComparison.CurrentCultureIgnoreCase));
 
             if (user != null && user.Access == UserType.Administrator)
             {

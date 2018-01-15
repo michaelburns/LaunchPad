@@ -1,3 +1,5 @@
+@using Microsoft.AspNetCore.Authorization
+@inject IAuthorizationService AuthorizationService
 @model LaunchPad.ViewModels.PowerShellViewModel
 
 @{
@@ -10,10 +12,13 @@
     <h4>
         @Html.DisplayFor(model => model.Name)
     </h4>
-    <div class="pull-right">
-        @Html.ActionLink("Edit", "Edit", new { id = Model.Id }) |
-        @Html.ActionLink("Delete", "Delete", new { id = Model.Id })
-    </div>
+    @if ((await AuthorizationService.AuthorizeAsync(User, "Author")).Succeeded)
+    {
+        <div class="pull-right">
+            @Html.ActionLink("Edit", "Edit", new { id = Model.Id }) |
+            @Html.ActionLink("Delete", "Delete", new { id = Model.Id })
+        </div>
+    }
 
 
     <hr />
@@ -29,15 +34,18 @@
     <div class="form-group">
         <div class="col-md-10 col-md-push-1">
 
-            <form id="scriptForm" asp-action="Run" method="post" asp-route-id="@Model.Id">
-                <a tabindex="0" id="LaunchScript" script-id="@Model.Id" action="launch" class="btn btn-primary">Launch Script</a>
-                <a tabindex="0" job-id="@Model.Id" action="schedule" class="jobModalButton btn btn-warning">Schedule</a>
-            </form>
+            @if ((await AuthorizationService.AuthorizeAsync(User, "Launcher")).Succeeded)
+            {
+                <form id="scriptForm" asp-action="Run" method="post" asp-route-id="@Model.Id">
+                    <a tabindex="0" id="LaunchScript" script-id="@Model.Id" action="launch" class="btn btn-primary">Launch Script</a>
+                    <a tabindex="0" job-id="@Model.Id" action="schedule" class="jobModalButton btn btn-warning">Schedule</a>
+                </form>
+            }
 
             @*@using (Html.BeginForm("Run", "PowerShell", new { id = Model.Id }, FormMethod.Post, new { id = "scriptForm" }))
-            {
-              
-            }*@
+                {
+
+                }*@
 
         </div>
     </div>

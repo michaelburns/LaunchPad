@@ -3,7 +3,7 @@
     public enum UserType
     {
         Disabled,
-        Scheduler,
+        Launcher,
         Author,
         Administrator
     }

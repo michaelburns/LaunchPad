@@ -39,7 +39,7 @@ namespace LaunchPad
             services.AddTransient<IScriptIO, ScriptIO>();
             services.AddTransient<IJobServices, JobServices>();
             services.AddTransient<Seeder>();
-            services.AddTransient<AdminRequirement>();
+            //services.AddTransient<AdminRequirement>();
 
             // Authentication
             services.AddAuthentication(IISDefaults.AuthenticationScheme);
@@ -52,9 +52,12 @@ namespace LaunchPad
                     policy.Requirements.Add(new AdminRequirement()));
                 options.AddPolicy("Author", policy =>
                     policy.Requirements.Add(new AuthorRequirement()));
+                options.AddPolicy("Launcher", policy => 
+                    policy.Requirements.Add(new LauncherRequirement()));
             });
             services.AddScoped<IAuthorizationHandler, AdminHandler>();
             services.AddScoped<IAuthorizationHandler, AuthorHandler>();
+            services.AddScoped<IAuthorizationHandler, LauncherHandler>();
 
             services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
         }
