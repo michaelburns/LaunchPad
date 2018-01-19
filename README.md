@@ -8,10 +8,8 @@
 ##### Automation for Everyone
 --------------
 
-CURRENTLY REWRTTING FOR ASP.NET CORE
 
-
-Currently using ASP.NET 5 RC1
+ASP.NET CORE 2.0 MVC
 
 This project is looking for contributors. If you have a feature you'd like to see implemented or a bug you'd liked fixed, the best and fastest way to make that happen is to implement it and submit it back upstream for consideration. All contributions will be given thorough consideration.
 
