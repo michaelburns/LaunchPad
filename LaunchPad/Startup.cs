@@ -87,11 +87,6 @@ namespace LaunchPad
                     template: "{controller=Home}/{action=Index}/{id?}");
             });
 
-            // HangFire
-            // ToDo: EF Migrations won't work if you have these next lines uncommneted because the application is trying to use the DB before it's created - it will fail. May want to move the seeder up first and actually seed the db.
-            app.UseHangfireServer();
-            app.UseHangfireDashboard("/PowerShell/Jobs");
-
             if (env.IsDevelopment())
             {
                 // Seed the database
@@ -101,6 +96,12 @@ namespace LaunchPad
                     seeder.Seed();
                 }
             }
+
+            // HangFire
+            app.UseHangfireServer();
+            app.UseHangfireDashboard("/PowerShell/Jobs");
+
+           
 
         }
     }
