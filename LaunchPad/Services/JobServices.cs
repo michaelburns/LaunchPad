@@ -50,7 +50,7 @@ namespace LaunchPad.Services
         public JobServices()
         {
             var options = new DbContextOptionsBuilder<ApplicationDbContext>();
-            options.UseSqlServer("Server=localhost;Database=LaunchPad;Trusted_Connection=True;MultipleActiveResultSets=true"); // This needs to come from configuration. 
+            options.UseSqlServer("Server=frcit-launchpad;Database=LaunchPad;Trusted_Connection=True;MultipleActiveResultSets=true"); // This needs to come from configuration. 
             _scriptRepository = new PowerShellRepository(new ApplicationDbContext(options.Options));
         }
 
@@ -171,6 +171,7 @@ namespace LaunchPad.Services
             {
                 {"Minutely", Cron.Minutely()},
                 {"Hourly", Cron.Hourly()},
+                {"Daily", Cron.Daily()},
                 {"Weekly", Cron.Weekly()},
                 {"Monthly", Cron.Monthly()},
                 {"Yearly", Cron.Yearly()}
@@ -309,6 +310,11 @@ namespace LaunchPad.Services
                 {
                     Text = "Hourly",
                     Value = "Hourly"
+                },
+                 new SelectListItem
+                {
+                    Text = "Daily",
+                    Value = "Daily"
                 },
                 new SelectListItem
                 {

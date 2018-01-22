@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using LaunchPad.Data;
 using LaunchPad.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 
 namespace LaunchPad.Policies
 {
@@ -18,9 +19,18 @@ namespace LaunchPad.Policies
 
         protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, LauncherRequirement requirement)
         {
-            var user = _context.Users.FirstOrDefault(u => String.Equals(u.Username, context.User.Identity.Name, StringComparison.CurrentCultureIgnoreCase));
+            var user = _context.Users
+                .Include(ur => ur.UserRoles)
+                .ThenInclude(ur => ur.Role)
+                .AsNoTracking()
+                .FirstOrDefault(u => String.Equals(u.Username, context.User.Identity.Name, StringComparison.CurrentCultureIgnoreCase));
 
-            if (user != null && user.Access >= UserType.Launcher)
+            if (user == null)
+                return Task.CompletedTask;
+
+            var userIsLauncher = user.UserRoles.Any(ur => ur.Role.Name == "Launcher");
+
+            if (userIsLauncher)
             {
                 context.Succeed(requirement);
             }

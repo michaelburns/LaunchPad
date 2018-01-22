@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Hosting;
+﻿using LaunchPad.Models;
+using Microsoft.AspNetCore.Hosting;
+using System.Linq;
 
 namespace LaunchPad.Data
 {
@@ -17,13 +19,24 @@ namespace LaunchPad.Data
         {
             _context.Database.EnsureCreated();
 
-            // Check if any user exists.
-            //if (!_context.Users.Any())
-            //{
-                
-            //}
+            // Create Default Roles
+            if (!_context.Roles.Any())
+            {
+                _context.Roles.AddRange(
+                    new Role { Name = "Administrator" },
+                    new Role { Name = "Author" },
+                    new Role { Name = "Launcher" });
+            }
 
-            // Todo: Create some seed data?
+            // Create First User
+            if (!_context.Users.Any())
+            {
+                _context.Users.Add(new User
+                {
+                    Username = "administrator", // Todo: Get current user fron http context
+                    // Todo: Set initial UserRoles
+                });
+            }
 
             _context.SaveChanges();
 ;        }

@@ -15,9 +15,7 @@
                 <th>
                     @Html.DisplayNameFor(model => model.Username)
                 </th>
-                <th>
-                    @Html.DisplayNameFor(model => model.Access)
-                </th>
+
         </tr>
     </thead>
     <tbody>
@@ -26,9 +24,7 @@
             <td>
                 <a asp-action="Edit" asp-route-id="@item.Id">@Html.DisplayFor(modelItem => item.Username)</a>
             </td>
-            <td>
-                @Html.DisplayFor(modelItem => item.Access)
-            </td>
+
         </tr>
 }
     </tbody>
