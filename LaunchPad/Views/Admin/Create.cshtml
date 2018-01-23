@@ -1,4 +1,4 @@
-﻿@model AdminEditViewModel
+﻿@model AdminViewModel
 
 @{
     ViewData["Title"] = "Create";
@@ -17,6 +17,11 @@
                 <span asp-validation-for="User.Username" class="text-danger"></span>
             </div>
             <div class="form-group">
+                <label asp-for="User.UserRoles" class="control-label">Roles</label>
+                <select asp-for="SelectedRoles" asp-items="@Model.AvailableRoles" class="multiselect"></select>
+                <span asp-validation-for="User.UserRoles" class="text-danger"></span>
+            </div>
+            <div class="form-group">
                 <input type="submit" value="Create" class="btn btn-default" />
             </div>
         </form>
@@ -29,4 +34,18 @@
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+
+    <script src="~/lib/bootstrap-multiselect/dist/js/bootstrap-multiselect.js"></script>
+
+    <script type="text/javascript">
+        $(document).ready(function () {
+            $('.multiselect').multiselect({
+                buttonWidth: '100%',
+                enableFiltering: true,
+                enableCaseInsensitiveFiltering: true,
+                includeSelectAllOption: true,
+                buttonClass: 'btn btn-primary'
+            });
+        });
+    </script>
 }

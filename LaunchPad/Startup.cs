@@ -39,7 +39,6 @@ namespace LaunchPad
             services.AddTransient<IScriptIO, ScriptIO>();
             services.AddTransient<IJobServices, JobServices>();
             services.AddTransient<Seeder>();
-            //services.AddTransient<AdminRequirement>();
 
             // Authentication
             services.AddAuthentication(IISDefaults.AuthenticationScheme);
@@ -49,15 +48,13 @@ namespace LaunchPad
             {
                 // TODO:This could be defined by a database "Role" and "Assignment"
                 options.AddPolicy("Administrator", policy =>
-                    policy.Requirements.Add(new AdminRequirement()));
+                    policy.Requirements.Add(new RoleRequirement("Administrator")));
                 options.AddPolicy("Author", policy =>
-                    policy.Requirements.Add(new AuthorRequirement()));
+                    policy.Requirements.Add(new RoleRequirement("Author")));
                 options.AddPolicy("Launcher", policy => 
-                    policy.Requirements.Add(new LauncherRequirement()));
+                    policy.Requirements.Add(new RoleRequirement("Launcher")));
             });
-            services.AddScoped<IAuthorizationHandler, AdminHandler>();
-            services.AddScoped<IAuthorizationHandler, AuthorHandler>();
-            services.AddScoped<IAuthorizationHandler, LauncherHandler>();
+            services.AddScoped<IAuthorizationHandler, RoleHandler>();
 
             services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
         }
@@ -99,9 +96,7 @@ namespace LaunchPad
 
             // HangFire
             app.UseHangfireServer();
-            app.UseHangfireDashboard("/PowerShell/Jobs");
-
-           
+            app.UseHangfireDashboard("/PowerShell/Jobs");           
 
         }
     }

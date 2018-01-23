@@ -21,23 +21,34 @@ namespace LaunchPad.Controllers
 
         public IActionResult Index()
         {
-            return View(_context.Users.ToList());
+            return View(_context.Users.Include(ur => ur.UserRoles).ThenInclude(r => r.Role).ToList());
         }
 
         public IActionResult Create()
         {
-            return View();
+            var adminVM = new AdminViewModel
+            {
+                AvailableRoles = new SelectList(_context.Roles.ToList(), "Id", "Name")
+            };
+
+            return View(adminVM);
         }
 
         [HttpPost]
-        public IActionResult Create(AdminEditViewModel newUser)
+        public IActionResult Create(AdminViewModel newUser)
         {
             if (ModelState.IsValid)
             {
                 User user = new User
                 {
-                    Username = newUser.User.Username
-                };
+                    Username = newUser.User.Username,
+                    UserRoles = (from ur in newUser.SelectedRoles
+                                 select new UserRole
+                                 {
+                                     RoleId = ur,
+                                     UserId = newUser.User.Id
+                                 }).ToList()
+            };
 
                 _context.Add(user);
                 _context.SaveChanges();
@@ -56,20 +67,19 @@ namespace LaunchPad.Controllers
             if (user == null)
                 return RedirectToAction("Index");
 
-            AdminEditViewModel adminVM = new AdminEditViewModel
+            AdminViewModel adminVM = new AdminViewModel
             {
                 User = user,
                 SelectedRoles = from ur in user.UserRoles.ToList()
-                                select ur.RoleId
-            };
-
-            ViewBag.Roles = new SelectList(_context.Roles.ToList(), "Id", "Name");
+                                select ur.RoleId,
+                AvailableRoles = new SelectList(_context.Roles.ToList(), "Id", "Name")
+        };
 
             return View(adminVM);
         }
 
         [HttpPost]
-        public IActionResult Edit(AdminEditViewModel editUser)
+        public IActionResult Edit(AdminViewModel editUser)
         {
             if (ModelState.IsValid)
             {
@@ -98,8 +108,6 @@ namespace LaunchPad.Controllers
                     return RedirectToAction("Index");
                 }                
             }
-
-            ViewBag.Roles = new SelectList(_context.Roles.ToList(), "Id", "Name");
 
             return View(editUser);
         }

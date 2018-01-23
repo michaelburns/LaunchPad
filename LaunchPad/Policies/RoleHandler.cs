@@ -2,22 +2,21 @@
 using System.Linq;
 using System.Threading.Tasks;
 using LaunchPad.Data;
-using LaunchPad.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 
 namespace LaunchPad.Policies
 {
-    public class LauncherHandler : AuthorizationHandler<LauncherRequirement>
+    //Todo: The only change in the authorization handlers is the role name, let's see if we can refactor to one and pass the required role name in Startup.cs
+    public class RoleHandler : AuthorizationHandler<RoleRequirement>
     {
         private readonly ApplicationDbContext _context;
 
-        public LauncherHandler(ApplicationDbContext context)
+        public RoleHandler(ApplicationDbContext context)
         {
             _context = context;
         }
-
-        protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, LauncherRequirement requirement)
+        protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, RoleRequirement requirement)
         {
             var user = _context.Users
                 .Include(ur => ur.UserRoles)
@@ -28,9 +27,9 @@ namespace LaunchPad.Policies
             if (user == null)
                 return Task.CompletedTask;
 
-            var userIsLauncher = user.UserRoles.Any(ur => ur.Role.Name == "Launcher");
-
-            if (userIsLauncher)
+            var userIsAdmin = user.UserRoles.Any(ur => ur.Role.Name == requirement.Role);
+            
+            if (userIsAdmin)
             {
                 context.Succeed(requirement);
             }
