@@ -177,7 +177,7 @@ namespace LaunchPad.Services
                 {"Yearly", Cron.Yearly()}
             };
 
-            RecurringJob.AddOrUpdate<IJobServices>(id.ToString(), x => x.Run(name, psParams), recurringSwitch[recurring]);
+            RecurringJob.AddOrUpdate<IJobServices>(id.ToString(), x => x.Run(name, psParams), recurringSwitch[recurring], TimeZoneInfo.Local);
         }
 
         public void Schedule(Script script, PowerShellSchedule schedule, string username)
