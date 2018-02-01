@@ -27,7 +27,7 @@ namespace LaunchPad.Services
         [AutomaticRetry(Attempts = 0)]
         void Run(string name, Dictionary<string, string> psParams);
 
-        void RunOnSchedule(int id, string name, string recurring, Dictionary<string, string> psParams);
+        void RunOnSchedule(int id, string name, string recurring, Dictionary<string, string> psParams, DateTime schedule);
         void SaveResults(string scriptName, IEnumerable<PSObject> results);
         void UpdateJob(string id, Status status, string outcome = null, string scriptName = null);
     }
@@ -165,16 +165,16 @@ namespace LaunchPad.Services
             runspace.Close();
         }
 
-        public void RunOnSchedule(int id, string name, string recurring, Dictionary<string, string> psParams)
+        public void RunOnSchedule(int id, string name, string recurring, Dictionary<string, string> psParams, DateTime schedule)
         {
             var recurringSwitch = new Dictionary<string, string>
             {
                 {"Minutely", Cron.Minutely()},
-                {"Hourly", Cron.Hourly()},
-                {"Daily", Cron.Daily()},
-                {"Weekly", Cron.Weekly()},
-                {"Monthly", Cron.Monthly()},
-                {"Yearly", Cron.Yearly()}
+                {"Hourly", Cron.Hourly(schedule.Minute)},
+                {"Daily", Cron.Daily(schedule.Hour, schedule.Minute)},
+                {"Weekly", Cron.Weekly(schedule.DayOfWeek, schedule.Hour, schedule.Minute)},
+                {"Monthly", Cron.Monthly(schedule.Day, schedule.Hour, schedule.Minute)},
+                {"Yearly", Cron.Yearly(schedule.Month, schedule.Day, schedule.Hour, schedule.Minute)}
             };
 
             RecurringJob.AddOrUpdate<IJobServices>(id.ToString(), x => x.Run(name, psParams), recurringSwitch[recurring], TimeZoneInfo.Local);
@@ -212,7 +212,7 @@ namespace LaunchPad.Services
                     JobId =
                         Int32.Parse(
                             BackgroundJob.Schedule<IJobServices>(x => x.RunOnSchedule(job.Id, script.Name,
-                                    schedule.SelectedRecurring, schedule.PSparams),
+                                    schedule.SelectedRecurring, schedule.PSparams, schedule.Date),
                                 new DateTime(schedule.Date.Ticks))),
                     RecurringId = job.Id,
                     Status = Status.Scheduled,
