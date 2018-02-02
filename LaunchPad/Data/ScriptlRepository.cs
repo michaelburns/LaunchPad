@@ -1,18 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using System.Linq;
 using LaunchPad.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace LaunchPad.Data
 {
     // Todo: Finish implementing interface with EF
-    public class PowerShellRepository : IScriptRepository
+    public class ScriptRepository : IScriptRepository
     {
         private ApplicationDbContext _context;
 
-        public PowerShellRepository(ApplicationDbContext context)
+        public ScriptRepository(ApplicationDbContext context)
         {
             _context = context;
         }

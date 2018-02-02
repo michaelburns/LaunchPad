@@ -35,7 +35,7 @@ namespace LaunchPad
             services.AddHangfire(config => config.UseSqlServerStorage(Configuration.GetConnectionString("DefaultConnection")));
 
             // Add DI
-            services.AddTransient<IScriptRepository, PowerShellRepository>();
+            services.AddTransient<IScriptRepository, ScriptRepository>();
             services.AddTransient<IScriptIO, ScriptIO>();
             services.AddTransient<IJobServices, JobServices>();
             services.AddTransient<Seeder>();
@@ -96,7 +96,7 @@ namespace LaunchPad
 
             // HangFire
             app.UseHangfireServer();
-            app.UseHangfireDashboard("/PowerShell/Jobs");           
+            app.UseHangfireDashboard("/Scripts/Jobs");           
 
         }
     }

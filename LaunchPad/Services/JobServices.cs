@@ -51,7 +51,7 @@ namespace LaunchPad.Services
         {
             var options = new DbContextOptionsBuilder<ApplicationDbContext>();
             options.UseSqlServer("Server=frcit-launchpad;Database=LaunchPad;Trusted_Connection=True;MultipleActiveResultSets=true"); // This needs to come from configuration. 
-            _scriptRepository = new PowerShellRepository(new ApplicationDbContext(options.Options));
+            _scriptRepository = new ScriptRepository(new ApplicationDbContext(options.Options));
         }
 
         //Laucnh/Schedule Jobs
