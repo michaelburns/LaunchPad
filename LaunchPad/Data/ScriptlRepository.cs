@@ -17,12 +17,12 @@ namespace LaunchPad.Data
         // Scripts
         public IQueryable<Script> GetScripts()
         {
-            return _context.Scripts;
+            return _context.Scripts.Include("Category");
         }
 
         public Script GetScriptById(int scriptId)
         {
-            return _context.Scripts.FirstOrDefault(s => s.Id == scriptId);
+            return _context.Scripts.Include("Category").FirstOrDefault(s => s.Id == scriptId);
         }
 
         public void InsertScript(Script script)
@@ -39,6 +39,13 @@ namespace LaunchPad.Data
         {
             var script = GetScriptById(scriptId);
             _context.Scripts.Remove(script);
+        }
+
+
+        // Categories
+        public IQueryable<Category> GetCategories()
+        {
+            return _context.Categories;
         }
 
 
@@ -74,5 +81,7 @@ namespace LaunchPad.Data
         {
             _context.SaveChanges(); // TODO: Look into SaveChangesAsync
         }
+
+      
     }
 }

@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using LaunchPad.Models;
+using System.ComponentModel.DataAnnotations;
 
 namespace LaunchPad.ViewModels
 {
@@ -6,6 +7,7 @@ namespace LaunchPad.ViewModels
     {
         public int Id { get; set; } // TODO: Reivew if id is necessary in the VM
         public string Name { get; set; }
+        public Category Category{ get; set; }
 
         [DataType(DataType.MultilineText)]
         public string Script { get; set; }

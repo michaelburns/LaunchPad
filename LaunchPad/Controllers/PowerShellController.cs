@@ -1,10 +1,12 @@
-﻿using Hangfire;
+﻿using AutoMapper;
+using Hangfire;
 using LaunchPad.Data;
 using LaunchPad.Models;
 using LaunchPad.Services;
 using LaunchPad.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,15 +14,17 @@ using System.Linq;
 namespace LaunchPad.Controllers
 {
     [Authorize]
-    public class PowerShellController: Controller
+    public class PowerShellController : Controller
     {
         private IScriptRepository _scriptRepository;
         private IScriptIO _scriptIO;
+        private IMapper _mapper;
 
-        public PowerShellController(IScriptRepository scriptRepository, IScriptIO scriptIO)
+        public PowerShellController(IScriptRepository scriptRepository, IScriptIO scriptIO, IMapper mapper)
         {
             _scriptRepository = scriptRepository;
             _scriptIO = scriptIO;
+            _mapper = mapper;
         }
 
         // GET: /PowerShell
@@ -34,6 +38,7 @@ namespace LaunchPad.Controllers
         [Authorize(Policy = "Author")]
         public IActionResult Create()
         {
+            ViewBag.Categories = new SelectList(_scriptRepository.GetCategories().ToList(), "Id", "Name");
             return View();
         }
 
@@ -42,16 +47,20 @@ namespace LaunchPad.Controllers
         [Authorize(Policy = "Author")]
         public IActionResult Create(PowerShellViewModel newScript)
         {
-            if(_scriptIO.ScriptExists(newScript.Name))
+            if (_scriptIO.ScriptExists(newScript.Name))
             {
                 ModelState.AddModelError("Name", "This Name Already Exists");
                 return View(); // TODO : Does newScript need to be passed to the view?
             }
 
-            var script = ConvertServices.CreateScript(newScript, User.Identity.Name);
+            var script = _mapper.Map<PowerShellViewModel, Script>(newScript);
+            script.Author = User.Identity.Name;
 
             if (TryValidateModel(script))
             {
+                // Set the category
+                script.Category = _scriptRepository.GetCategories().FirstOrDefault(c => c.Id == newScript.Category.Id);
+
                 //Write File and Save Metadata
                 if (_scriptIO.Write(newScript.Name, newScript.Script))
                 {
@@ -72,14 +81,11 @@ namespace LaunchPad.Controllers
             var script = _scriptRepository.GetScriptById(id);
             if (script == null) { return RedirectToAction("Index"); }
 
-            var scriptContents = _scriptIO.Read(script.Name);
+            var scriptView = _mapper.Map<Script, PowerShellViewModel>(script);
+            scriptView.Script = _scriptIO.Read(script.Name);
 
-            var scriptView = new PowerShellViewModel()
-            {
-                Id = script.Id,
-                Name = script.Name,
-                Script = scriptContents
-            };
+            ViewBag.Categories = new SelectList(_scriptRepository.GetCategories().ToList(), "Id", "Name");
+
             return View(scriptView);
         }
 
@@ -89,10 +95,22 @@ namespace LaunchPad.Controllers
         [Authorize(Policy = "Author")]
         public ActionResult Edit(PowerShellViewModel vmScript)
         {
-            //For now - only editning the file - will need to allow for renames
-            if (_scriptIO.Write(vmScript.Name, vmScript.Script))
+            var script = _scriptRepository.GetScriptById(vmScript.Id);
+
+            if (TryValidateModel(script))
             {
-                return RedirectToAction("Details", new { id = vmScript.Id });
+                // Set the category
+                script.Category = _scriptRepository.GetCategories().FirstOrDefault(c => c.Id == vmScript.Category.Id);
+
+                //Write File and Save Metadata
+                if (_scriptIO.Write(vmScript.Name, vmScript.Script))
+                {
+                    //Save PowerShell Script
+                    _scriptRepository.UpdateScript(script);
+                    _scriptRepository.Save();
+                    //TODO: return RedirectToAction("Details", new { id = psScript.Id });
+                    return RedirectToAction("Index");
+                }
             }
             return View(vmScript);
         }
@@ -102,16 +120,11 @@ namespace LaunchPad.Controllers
         public IActionResult Details(int id)
         {
             var script = _scriptRepository.GetScriptById(id);
-            if(script == null ) { return RedirectToAction("Index"); }
+            if (script == null) { return RedirectToAction("Index"); }
 
-            var scriptContents = _scriptIO.Read(script.Name);
+            var scriptView = _mapper.Map<Script, PowerShellViewModel>(script);
+            scriptView.Script = _scriptIO.Read(script.Name);
 
-            var scriptView = new PowerShellViewModel()
-            {
-                Id = script.Id,
-                Name = script.Name,
-                Script = scriptContents
-            };
             return View(scriptView);
         }
 
@@ -122,8 +135,8 @@ namespace LaunchPad.Controllers
 
             var jobs = _scriptRepository.GetJobs()
                         .OrderByDescending(e => e.Id)
-                        .Take(history)
-                        .Where(e => e.ScriptId == id && e.JobType != JobType.ScheduledWithRecurring && e.JobType != JobType.Recurring);
+                        .Where(e => e.ScriptId == id && e.JobType != JobType.ScheduledWithRecurring && e.JobType != JobType.Recurring)
+                        .Take(history);
 
             return PartialView(jobs);
         }

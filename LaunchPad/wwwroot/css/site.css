@@ -35,3 +35,45 @@ textarea {
         display: none;
     }
 }
+
+
+.panel-primary .panel-heading,
+.panel-primary .panel-footer,
+.panel-primary.panel-colorful {
+    background-color: #25476a;
+    border-color: #25476a;
+    color: #fff
+}
+
+.panel-primary.panel-colorful {
+    box-shadow: 0 1px 1px #0b141e
+}
+
+
+.panel-dark .panel-heading,
+.panel-dark .panel-footer,
+.panel-dark.panel-colorful {
+    background-color: #3a444e;
+    border-color: #3a444e;
+    color: #fff
+}
+
+.panel-dark.panel-colorful {
+    box-shadow: 0 1px 1px #0f1114
+}
+
+.pad-all {
+    padding: 15px
+}
+
+.text-2x {
+    font-size: 2em
+}
+
+.text-3x {
+    font-size: 3em
+}
+
+.text-thin {
+    font-weight: 300
+}

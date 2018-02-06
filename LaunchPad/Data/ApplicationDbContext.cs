@@ -13,6 +13,7 @@ namespace LaunchPad.Data
 
         public DbSet<Script> Scripts { get; set; }
         public DbSet<Job> Jobs { get; set; }
+        public DbSet<Category> Categories { get; set; }
         public DbSet<User> Users { get; set; }
         public DbSet<Role> Roles { get; set; }
         public DbSet<UserRole> UserRoles { get; set; }

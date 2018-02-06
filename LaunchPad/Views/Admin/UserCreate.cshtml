@@ -1,22 +1,16 @@
 ﻿@model AdminViewModel
 
 @{
-    ViewData["Title"] = "Edit";
+    ViewData["Title"] = "Create";
 }
 
-<div class="row">
-    <h2 class="col-xs-6">Edit User</h2>
-    <h2 class="col-xs-6"><a class="btn btn-danger pull-right" asp-action="Disable" asp-route-id="@Model.User.Id">Disable</a></h2>
-</div>
-
-
+<h2>New User</h2>
 
 <hr />
 <div class="row">
     <div class="col-md-4">
-        <form asp-action="Edit" asp-method="Post">
+        <form asp-action="UserCreate">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-            <input type="hidden" asp-for="User.Id" />
             <div class="form-group">
                 <label asp-for="User.Username" class="control-label"></label>
                 <input asp-for="User.Username" class="form-control" />
@@ -28,18 +22,19 @@
                 <span asp-validation-for="User.UserRoles" class="text-danger"></span>
             </div>
             <div class="form-group">
-                <input type="submit" value="Save" class="btn btn-default" />
+                <input type="submit" value="Create" class="btn btn-default" />
             </div>
         </form>
     </div>
 </div>
 
 <div>
-    <a asp-action="Index">Back to List</a>
+    <a asp-action="UserList">Back to List</a>
 </div>
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+
     <script src="~/lib/bootstrap-multiselect/dist/js/bootstrap-multiselect.js"></script>
 
     <script type="text/javascript">
@@ -49,7 +44,7 @@
                 enableFiltering: true,
                 enableCaseInsensitiveFiltering: true,
                 includeSelectAllOption: true,
-                buttonClass: 'btn btn-primary'                
+                buttonClass: 'btn btn-primary'
             });
         });
     </script>

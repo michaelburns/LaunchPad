@@ -11,6 +11,7 @@ using LaunchPad.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.IISIntegration;
+using AutoMapper;
 
 namespace LaunchPad
 {
@@ -29,6 +30,9 @@ namespace LaunchPad
             // Add framework services.
             services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection")));
+
+            // Automapper
+            services.AddAutoMapper();
 
             // Add framework services.
             services.AddMvc();

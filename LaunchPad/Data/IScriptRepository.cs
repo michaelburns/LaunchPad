@@ -9,14 +9,18 @@ namespace LaunchPad.Data
     public interface IScriptRepository
     {
 
-        //Scripts
+        // Scripts
         IQueryable<Script> GetScripts();
         Script GetScriptById(int scriptId);
         void InsertScript(Script script);
         void DeleteScript(int scriptId);
         void UpdateScript(Script script);
 
-        //Jobs
+        // Categories
+        IQueryable<Category> GetCategories();
+        
+
+        // Jobs
         IQueryable<Job> GetJobs();
         Job GetJobById(int jobId);
         void InsertJob(Job job);

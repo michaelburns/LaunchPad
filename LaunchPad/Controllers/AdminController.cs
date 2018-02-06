@@ -21,10 +21,15 @@ namespace LaunchPad.Controllers
 
         public IActionResult Index()
         {
+            return View();
+        }
+
+        public IActionResult UserList()
+        {
             return View(_context.Users.Include(ur => ur.UserRoles).ThenInclude(r => r.Role).ToList());
         }
 
-        public IActionResult Create()
+        public IActionResult UserCreate()
         {
             var adminVM = new AdminViewModel
             {
@@ -35,7 +40,7 @@ namespace LaunchPad.Controllers
         }
 
         [HttpPost]
-        public IActionResult Create(AdminViewModel newUser)
+        public IActionResult UserCreate(AdminViewModel newUser)
         {
             if (ModelState.IsValid)
             {
@@ -48,24 +53,24 @@ namespace LaunchPad.Controllers
                                      RoleId = ur,
                                      UserId = newUser.User.Id
                                  }).ToList()
-            };
+                };
 
                 _context.Add(user);
                 _context.SaveChanges();
-                return RedirectToAction("Index");
+                return RedirectToAction("UserIndex");
             }
 
             return View(newUser);
         }
 
-        public IActionResult Edit(int? id)
+        public IActionResult UserEdit(int? id)
         {
-            if (id == null) { return RedirectToAction("Index"); }
+            if (id == null) { return RedirectToAction("UserIndex"); }
 
             var user = _context.Users.Include(u => u.UserRoles).FirstOrDefault(u => u.Id == id);
 
             if (user == null)
-                return RedirectToAction("Index");
+                return RedirectToAction("UserIndex");
 
             AdminViewModel adminVM = new AdminViewModel
             {
@@ -73,19 +78,19 @@ namespace LaunchPad.Controllers
                 SelectedRoles = from ur in user.UserRoles.ToList()
                                 select ur.RoleId,
                 AvailableRoles = new SelectList(_context.Roles.ToList(), "Id", "Name")
-        };
+            };
 
             return View(adminVM);
         }
 
         [HttpPost]
-        public IActionResult Edit(AdminViewModel editUser)
+        public IActionResult UserEdit(AdminViewModel editUser)
         {
             if (ModelState.IsValid)
             {
                 var user = _context.Users.Include(u => u.UserRoles).FirstOrDefault(u => u.Id == editUser.User.Id);
 
-                if(user != null)
+                if (user != null)
                 {
 
                     // Clear user roles
@@ -95,24 +100,24 @@ namespace LaunchPad.Controllers
                     if (editUser.SelectedRoles != null)
                     {
                         user.UserRoles = (from ur in editUser.SelectedRoles
-                                         select new UserRole
-                                         {
-                                             RoleId = ur,
-                                             UserId = editUser.User.Id
-                                         }).ToList();
+                                          select new UserRole
+                                          {
+                                              RoleId = ur,
+                                              UserId = editUser.User.Id
+                                          }).ToList();
                     }
 
                     user.Username = editUser.User.Username;
                     _context.Entry(user).State = EntityState.Modified;
                     _context.SaveChanges();
-                    return RedirectToAction("Index");
-                }                
+                    return RedirectToAction("UserIndex");
+                }
             }
 
             return View(editUser);
         }
 
-        public IActionResult Disable(int id)
+        public IActionResult UserDisable(int id)
         {
             var user = _context.Users.Include(u => u.UserRoles).FirstOrDefault(u => u.Id == id);
 
@@ -122,7 +127,54 @@ namespace LaunchPad.Controllers
             }
             _context.SaveChanges();
 
-            return RedirectToAction("Index");
+            return RedirectToAction("UserIndex");
         }
+
+        public IActionResult CategoryList()
+        {
+            return View(_context.Categories.ToList());
+        }
+
+        public IActionResult CategoryCreate()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        public IActionResult CategoryCreate(Category category)
+        {
+            if (!ModelState.IsValid)
+                return View(category);
+
+            _context.Add(category);
+            _context.SaveChanges();
+            return RedirectToAction("CategoryList");
+        }
+
+        public IActionResult CategoryEdit(int? id)
+        {
+            if (id == null) { return RedirectToAction("CategoryIndex"); }
+
+            var category = _context.Categories.FirstOrDefault(c => c.Id == id);
+
+            if (category == null)
+                return RedirectToAction("CategoryIndex");
+
+            return View(category);
+        }
+
+        [HttpPost]
+        public IActionResult CategoryEdit(Category category)
+        {
+            if (ModelState.IsValid)
+            {
+                _context.Entry(category).State = EntityState.Modified;
+                _context.SaveChanges();
+                return RedirectToAction("CategoryList");
+            }
+
+            return View(category);
+        }
+
     }
 }

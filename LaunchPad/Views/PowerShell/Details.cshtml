@@ -9,9 +9,14 @@
 <h2></h2>
 
 <div class="form-horizontal">
-    <h4>
-        @Html.DisplayFor(model => model.Name)
-    </h4>
+    <div class="row">
+        <h4>
+            @Html.DisplayFor(model => model.Name)
+            <span class="pull-right">
+               @Html.DisplayFor(model => model.Category.Name)
+            </span>            
+        </h4>
+    </div>
     @if ((await AuthorizationService.AuthorizeAsync(User, "Author")).Succeeded)
     {
         <div class="pull-right">

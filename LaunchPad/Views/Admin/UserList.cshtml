@@ -1,0 +1,38 @@
+﻿@model IEnumerable<LaunchPad.Models.User>
+
+@{
+    ViewData["Title"] = "Users";
+}
+
+<h2>Users</h2>
+
+<p>
+    <a asp-action="UserCreate">New User</a>
+</p>
+<table class="table table-striped table-hover">
+    <thead>
+        <tr>
+            <th>
+                @Html.DisplayNameFor(model => model.Username)
+            </th>
+            <th>
+                Roles
+            </th>
+
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>
+                    <a asp-action="UserEdit" asp-route-id="@item.Id">@Html.DisplayFor(modelItem => item.Username)</a>
+                </td>
+                <td>
+                    <span>@String.Join(", ", item.UserRoles.Select(r => r.Role.Name))</span>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
