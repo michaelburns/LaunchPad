@@ -57,7 +57,7 @@ namespace LaunchPad.Controllers
 
                 _context.Add(user);
                 _context.SaveChanges();
-                return RedirectToAction("UserIndex");
+                return RedirectToAction("UserList");
             }
 
             return View(newUser);
@@ -65,12 +65,12 @@ namespace LaunchPad.Controllers
 
         public IActionResult UserEdit(int? id)
         {
-            if (id == null) { return RedirectToAction("UserIndex"); }
+            if (id == null) { return RedirectToAction("UserList"); }
 
             var user = _context.Users.Include(u => u.UserRoles).FirstOrDefault(u => u.Id == id);
 
             if (user == null)
-                return RedirectToAction("UserIndex");
+                return RedirectToAction("UserList");
 
             AdminViewModel adminVM = new AdminViewModel
             {
@@ -110,7 +110,7 @@ namespace LaunchPad.Controllers
                     user.Username = editUser.User.Username;
                     _context.Entry(user).State = EntityState.Modified;
                     _context.SaveChanges();
-                    return RedirectToAction("UserIndex");
+                    return RedirectToAction("UserList");
                 }
             }
 
