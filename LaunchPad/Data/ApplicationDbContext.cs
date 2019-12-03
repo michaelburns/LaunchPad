@@ -14,6 +14,7 @@ namespace LaunchPad.Data
         public DbSet<Script> Scripts { get; set; }
         public DbSet<Job> Jobs { get; set; }
         public DbSet<Category> Categories { get; set; }
+        public DbSet<CategoryRole> CategoryRoles { get; set; }
         public DbSet<User> Users { get; set; }
         public DbSet<Role> Roles { get; set; }
         public DbSet<UserRole> UserRoles { get; set; }
@@ -32,6 +33,14 @@ namespace LaunchPad.Data
                 .HasOne(r => r.Role)
                 .WithMany(r => r.UserRoles)
                 .HasForeignKey(r => r.RoleId);
+
+            modelBuilder.Entity<CategoryRole>()
+                .HasKey(r => new { r.CategoryId, r.RoleId });
+
+            modelBuilder.Entity<CategoryRole>()
+                .HasOne(u => u.Category)
+                .WithMany(u => u.CategoryRoles)
+                .HasForeignKey(u => u.CategoryId);
         }
     }
 }

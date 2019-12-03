@@ -155,20 +155,50 @@ namespace LaunchPad.Controllers
         {
             if (id == null) { return RedirectToAction("CategoryIndex"); }
 
-            var category = _context.Categories.FirstOrDefault(c => c.Id == id);
+            var category = _context.Categories.Include(x => x.CategoryRoles).FirstOrDefault(c => c.Id == id);
 
             if (category == null)
                 return RedirectToAction("CategoryIndex");
 
-            return View(category);
+            var viewModel = new CategoryViewModel()
+            {
+                Category = category,
+                SelectedRoles = from ur in category.CategoryRoles.ToList()
+                                select ur.RoleId,
+                AvailableRoles = new SelectList(_context.Roles.ToList(), "Id", "Name")
+            };
+
+            return View(viewModel);
         }
 
         [HttpPost]
-        public IActionResult CategoryEdit(Category category)
+        public IActionResult CategoryEdit(CategoryViewModel category)
         {
             if (ModelState.IsValid)
             {
-                _context.Entry(category).State = EntityState.Modified;
+                /*
+                 TODO: 
+                 
+                var user = _context.Users.Include(u => u.UserRoles).FirstOrDefault(u => u.Id == editUser.User.Id);
+
+                if (user != null)
+                {
+
+                    // Clear user roles
+                    _context.UserRoles.RemoveRange(user.UserRoles);
+                    _context.SaveChanges();
+
+                    if (editUser.SelectedRoles != null)
+                    {
+                        user.UserRoles = (from ur in editUser.SelectedRoles
+                                          select new UserRole
+                                          {
+                                              RoleId = ur,
+                                              UserId = editUser.User.Id
+                                          }).ToList();
+                    }
+                */
+                _context.Entry(category.Category).State = EntityState.Modified;
                 _context.SaveChanges();
                 return RedirectToAction("CategoryList");
             }
