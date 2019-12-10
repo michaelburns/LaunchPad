@@ -1,4 +1,4 @@
-﻿@model LaunchPad.ViewModels.CategoryViewModel
+﻿@model CategoryViewModel
 
 @{
     ViewData["Title"] = "Edit";
@@ -9,7 +9,7 @@
 <hr />
 <div class="row">
     <div class="col-md-4">
-        <form asp-action="CategoryEdit">
+        <form asp-action="CategoryEdit" asp-method="Post">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <input type="hidden" asp-for="Category.Id" />
             <div class="form-group">
@@ -32,4 +32,22 @@
 <div>
     <a asp-action="CategoryList">Back to List</a>
 </div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script src="~/lib/bootstrap-multiselect/dist/js/bootstrap-multiselect.js"></script>
+
+    <script type="text/javascript">
+        $(document).ready(function () {
+            $('.multiselect').multiselect({
+                buttonWidth: '100%',
+                enableFiltering: true,
+                enableCaseInsensitiveFiltering: true,
+                includeSelectAllOption: true,
+                buttonClass: 'btn btn-primary'
+            });
+        });
+    </script>
+}
+
 

@@ -172,38 +172,40 @@ namespace LaunchPad.Controllers
         }
 
         [HttpPost]
-        public IActionResult CategoryEdit(CategoryViewModel category)
+        public IActionResult CategoryEdit(CategoryViewModel viewModel)
         {
             if (ModelState.IsValid)
             {
                 /*
                  TODO: 
-                 
-                var user = _context.Users.Include(u => u.UserRoles).FirstOrDefault(u => u.Id == editUser.User.Id);
+                */
 
-                if (user != null)
+                var category = _context.Categories.Include(u => u.CategoryRoles).FirstOrDefault(u => u.Id == viewModel.Category.Id);
+
+                if (category != null)
                 {
 
                     // Clear user roles
-                    _context.UserRoles.RemoveRange(user.UserRoles);
+                    _context.CategoryRoles.RemoveRange(category.CategoryRoles);
                     _context.SaveChanges();
 
-                    if (editUser.SelectedRoles != null)
+                    if (viewModel.SelectedRoles != null)
                     {
-                        user.UserRoles = (from ur in editUser.SelectedRoles
-                                          select new UserRole
-                                          {
-                                              RoleId = ur,
-                                              UserId = editUser.User.Id
-                                          }).ToList();
+                        category.CategoryRoles = (from ur in viewModel.SelectedRoles
+                                                  select new CategoryRole
+                                                  {
+                                                      RoleId = ur,
+                                                      CategoryId = viewModel.Category.Id
+                                                  }).ToList();
                     }
-                */
-                _context.Entry(category.Category).State = EntityState.Modified;
-                _context.SaveChanges();
-                return RedirectToAction("CategoryList");
+
+                    _context.Entry(category).State = EntityState.Modified;
+                    _context.SaveChanges();
+                    return RedirectToAction("CategoryList");
+                }
             }
 
-            return View(category);
+            return View(viewModel);
         }
 
     }
