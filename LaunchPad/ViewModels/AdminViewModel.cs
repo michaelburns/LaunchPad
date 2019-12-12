@@ -9,5 +9,7 @@ namespace LaunchPad.ViewModels
         public User User { get; set; }
         public IEnumerable<int> SelectedRoles { get; set; }
         public SelectList AvailableRoles { get; set; }
+        public IEnumerable<int> SelectedCategories { get; set; }
+        public SelectList AvailableCategories { get; set; }
     }
 }

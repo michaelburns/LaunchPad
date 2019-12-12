@@ -18,11 +18,6 @@
                 <span asp-validation-for="Category.Name" class="text-danger"></span>
             </div>
             <div class="form-group">
-                <label asp-for="Category.CategoryRoles" class="control-label">Roles</label>
-                <select asp-for="SelectedRoles" asp-items="@Model.AvailableRoles" class="multiselect"></select>
-                <span asp-validation-for="Category.CategoryRoles" class="text-danger"></span>
-            </div>
-            <div class="form-group">
                 <input type="submit" value="Save" class="btn btn-default" />
             </div>
         </form>
@@ -33,21 +28,5 @@
     <a asp-action="CategoryList">Back to List</a>
 </div>
 
-@section Scripts {
-    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
-    <script src="~/lib/bootstrap-multiselect/dist/js/bootstrap-multiselect.js"></script>
-
-    <script type="text/javascript">
-        $(document).ready(function () {
-            $('.multiselect').multiselect({
-                buttonWidth: '100%',
-                enableFiltering: true,
-                enableCaseInsensitiveFiltering: true,
-                includeSelectAllOption: true,
-                buttonClass: 'btn btn-primary'
-            });
-        });
-    </script>
-}
 
 

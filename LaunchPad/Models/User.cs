@@ -10,6 +10,6 @@ namespace LaunchPad.Models
         public string Username { get; set; }
 
         public IEnumerable<UserRole> UserRoles { get; set; }
-
+        public IEnumerable<UserCategory> Categories { get; set; }
     }
 }

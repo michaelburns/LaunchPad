@@ -67,17 +67,22 @@ namespace LaunchPad.Controllers
         {
             if (id == null) { return RedirectToAction("UserList"); }
 
-            var user = _context.Users.Include(u => u.UserRoles).FirstOrDefault(u => u.Id == id);
+            var user = _context.Users.Include(u => u.UserRoles).Include(u => u.Categories).FirstOrDefault(u => u.Id == id);
 
             if (user == null)
                 return RedirectToAction("UserList");
+
+            ViewBag.Categories = new SelectList(_context.Categories.ToList(), "Id", "Name");
 
             AdminViewModel adminVM = new AdminViewModel
             {
                 User = user,
                 SelectedRoles = from ur in user.UserRoles.ToList()
                                 select ur.RoleId,
-                AvailableRoles = new SelectList(_context.Roles.ToList(), "Id", "Name")
+                AvailableRoles = new SelectList(_context.Roles.ToList(), "Id", "Name"),
+                SelectedCategories = from uc in user.Categories.ToList()
+                                select uc.CategoryId,
+                AvailableCategories = new SelectList(_context.Categories.ToList(), "Id", "Name")
             };
 
             return View(adminVM);
@@ -88,7 +93,7 @@ namespace LaunchPad.Controllers
         {
             if (ModelState.IsValid)
             {
-                var user = _context.Users.Include(u => u.UserRoles).FirstOrDefault(u => u.Id == editUser.User.Id);
+                var user = _context.Users.Include(u => u.UserRoles).Include(u => u.Categories).FirstOrDefault(u => u.Id == editUser.User.Id);
 
                 if (user != null)
                 {
@@ -106,6 +111,21 @@ namespace LaunchPad.Controllers
                                               UserId = editUser.User.Id
                                           }).ToList();
                     }
+
+
+                    _context.UserCategory.RemoveRange(user.Categories);
+                    _context.SaveChanges();
+
+                    if (editUser.SelectedCategories != null)
+                    {
+                        user.Categories = (from ur in editUser.SelectedCategories
+                                          select new UserCategory
+                                          {
+                                              CategoryId = ur,
+                                              UserId = editUser.User.Id
+                                          }).ToList();
+                    }
+
 
                     user.Username = editUser.User.Username;
                     _context.Entry(user).State = EntityState.Modified;
@@ -155,17 +175,14 @@ namespace LaunchPad.Controllers
         {
             if (id == null) { return RedirectToAction("CategoryIndex"); }
 
-            var category = _context.Categories.Include(x => x.CategoryRoles).FirstOrDefault(c => c.Id == id);
+            var category = _context.Categories.FirstOrDefault(c => c.Id == id);
 
             if (category == null)
                 return RedirectToAction("CategoryIndex");
 
             var viewModel = new CategoryViewModel()
             {
-                Category = category,
-                SelectedRoles = from ur in category.CategoryRoles.ToList()
-                                select ur.RoleId,
-                AvailableRoles = new SelectList(_context.Roles.ToList(), "Id", "Name")
+                Category = category
             };
 
             return View(viewModel);
@@ -176,29 +193,10 @@ namespace LaunchPad.Controllers
         {
             if (ModelState.IsValid)
             {
-                /*
-                 TODO: 
-                */
-
-                var category = _context.Categories.Include(u => u.CategoryRoles).FirstOrDefault(u => u.Id == viewModel.Category.Id);
+                var category = _context.Categories.FirstOrDefault(u => u.Id == viewModel.Category.Id);
 
                 if (category != null)
                 {
-
-                    // Clear user roles
-                    _context.CategoryRoles.RemoveRange(category.CategoryRoles);
-                    _context.SaveChanges();
-
-                    if (viewModel.SelectedRoles != null)
-                    {
-                        category.CategoryRoles = (from ur in viewModel.SelectedRoles
-                                                  select new CategoryRole
-                                                  {
-                                                      RoleId = ur,
-                                                      CategoryId = viewModel.Category.Id
-                                                  }).ToList();
-                    }
-
                     _context.Entry(category).State = EntityState.Modified;
                     _context.SaveChanges();
                     return RedirectToAction("CategoryList");
