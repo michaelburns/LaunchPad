@@ -27,7 +27,6 @@
                 <select asp-for="SelectedRoles" asp-items="@Model.AvailableRoles" class="multiselect"></select>
                 <span asp-validation-for="User.UserRoles" class="text-danger"></span>
             </div>
-
             <div class="form-group">
                 <label class="control-label col-md-2" asp-for="User.Categories"></label>
                 <div class="col-md-10">
@@ -37,7 +36,6 @@
                     <span asp-validation-for="User.Categories" class="text-danger"></span>
                 </div>
             </div>
-
             <div class="form-group">
                 <input type="submit" value="Save" class="btn btn-default" />
             </div>

@@ -33,7 +33,8 @@ namespace LaunchPad.Controllers
         {
             var adminVM = new AdminViewModel
             {
-                AvailableRoles = new SelectList(_context.Roles.ToList(), "Id", "Name")
+                AvailableRoles = new SelectList(_context.Roles.ToList(), "Id", "Name"),
+                AvailableCategories = new SelectList(_context.Categories.ToList(), "Id", "Name")
             };
 
             return View(adminVM);
@@ -52,8 +53,14 @@ namespace LaunchPad.Controllers
                                  {
                                      RoleId = ur,
                                      UserId = newUser.User.Id
-                                 }).ToList()
-                };
+                                 }).ToList(),
+                    Categories = (from ur in newUser.SelectedCategories
+                                  select new UserCategory
+                                  {
+                                      CategoryId = ur,
+                                      UserId = newUser.User.Id
+                                  }).ToList()
+            };
 
                 _context.Add(user);
                 _context.SaveChanges();
