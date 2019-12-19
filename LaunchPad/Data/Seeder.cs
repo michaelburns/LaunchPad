@@ -17,7 +17,7 @@ namespace LaunchPad.Data
 
         public void Seed()
         {
-            _context.Database.EnsureCreated();
+            http://localhost:24161_context.Database.EnsureCreated();
 
             // Create Default Roles
             if (!_context.Roles.Any())
