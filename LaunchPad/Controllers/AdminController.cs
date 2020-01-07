@@ -66,8 +66,10 @@ namespace LaunchPad.Controllers
                 _context.SaveChanges();
                 return RedirectToAction("UserList");
             }
-
-            return View(newUser);
+            else
+            {
+                return UserCreate();
+            }
         }
 
         public IActionResult UserEdit(int? id)
@@ -139,6 +141,9 @@ namespace LaunchPad.Controllers
                     _context.SaveChanges();
                     return RedirectToAction("UserList");
                 }
+            } else
+            {
+                return UserEdit(editUser.User.Id);
             }
 
             return View(editUser);
