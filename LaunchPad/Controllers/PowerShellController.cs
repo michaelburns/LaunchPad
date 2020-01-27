@@ -7,6 +7,7 @@ using LaunchPad.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,13 +15,13 @@ using System.Linq;
 namespace LaunchPad.Controllers
 {
     [Authorize]
-    public class PowerShellController : Controller
+    public class PowerShellController : BaseController
     {
         private IScriptRepository _scriptRepository;
         private IScriptIO _scriptIO;
         private IMapper _mapper;
 
-        public PowerShellController(IScriptRepository scriptRepository, IScriptIO scriptIO, IMapper mapper)
+        public PowerShellController(IScriptRepository scriptRepository, IScriptIO scriptIO, IMapper mapper, ApplicationDbContext context) : base(context)
         {
             _scriptRepository = scriptRepository;
             _scriptIO = scriptIO;
@@ -30,7 +31,10 @@ namespace LaunchPad.Controllers
         // GET: /PowerShell
         public IActionResult Index()
         {
-            return View(_scriptRepository.GetScripts());
+            var scripts = _scriptRepository.GetScripts();
+            var categoryIds = GetUserCategoryIds();
+            var authorizeScripts = scripts.Where(s => categoryIds.Contains(s.Category.Id));
+            return View(authorizeScripts);
         }
 
         // GET: /PowerShell/Create
@@ -80,6 +84,7 @@ namespace LaunchPad.Controllers
         {
             var script = _scriptRepository.GetScriptById(id);
             if (script == null) { return RedirectToAction("Index"); }
+            if (!UserHasAccessToCategory(script.Category.Id)) { return RedirectToAction("Index"); }
 
             var scriptView = _mapper.Map<Script, PowerShellViewModel>(script);
             scriptView.Script = _scriptIO.Read(script.Name);
@@ -121,6 +126,7 @@ namespace LaunchPad.Controllers
         {
             var script = _scriptRepository.GetScriptById(id);
             if (script == null) { return RedirectToAction("Index"); }
+            if (script.Category != null && !UserHasAccessToCategory(script.Category.Id)) { return RedirectToAction("Index"); }
 
             var scriptView = _mapper.Map<Script, PowerShellViewModel>(script);
             scriptView.Script = _scriptIO.Read(script.Name);
@@ -155,6 +161,7 @@ namespace LaunchPad.Controllers
         {
             var jobServices = new JobServices(_scriptRepository, _scriptIO); // TODO: This can't be right.
             var script = _scriptRepository.GetScriptById(id);
+            if (script.Category != null && !UserHasAccessToCategory(script.Category.Id)) { return RedirectToAction("Index"); }
             jobServices.LaunchScript(User.Identity.Name, script);
             return RedirectToAction("Details", new { id });
         }
@@ -165,6 +172,7 @@ namespace LaunchPad.Controllers
             var script = _scriptRepository.GetScriptById(id);
 
             if (script == null) return NotFound();
+            if (script.Category != null && !UserHasAccessToCategory(script.Category.Id)) { return RedirectToAction("Index"); }
 
             var scriptParams = _scriptIO.ScriptParams(script.Name);
 
@@ -195,6 +203,7 @@ namespace LaunchPad.Controllers
         {
             var script = _scriptRepository.GetScriptById(id);
             if (script == null) return NotFound();
+            if (script.Category != null && !UserHasAccessToCategory(script.Category.Id)) { return RedirectToAction("Index"); }
 
             var scriptParams = _scriptIO.ScriptParams(script.Name) ??
                                new Dictionary<string, string>();
@@ -217,6 +226,7 @@ namespace LaunchPad.Controllers
             var jobServices = new JobServices(_scriptRepository, _scriptIO);
             var psMetadata = _scriptRepository.GetScriptById(schedule.Id);
             if (psMetadata == null) return NotFound();
+            if (psMetadata.Category != null && !UserHasAccessToCategory(psMetadata.Category.Id)) { return RedirectToAction("Index"); }
             jobServices.Schedule(psMetadata, schedule, User.Identity.Name);
             return RedirectToAction("Details", new { id = schedule.Id });
         }
@@ -263,6 +273,7 @@ namespace LaunchPad.Controllers
             {
                 return RedirectToAction("Index");
             }
+            if (script.Category != null && !UserHasAccessToCategory(script.Category.Id)) { return RedirectToAction("Index"); }
             return View(script);
         }
 
@@ -273,6 +284,7 @@ namespace LaunchPad.Controllers
         public ActionResult DeleteConfirmed(int id)
         {
             var psMetadata = _scriptRepository.GetScriptById(id);
+            if (psMetadata.Category != null && !UserHasAccessToCategory(psMetadata.Category.Id)) { return RedirectToAction("Index"); }
 
             if (_scriptIO.Delete(psMetadata.Name))
             {

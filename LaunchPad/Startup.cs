@@ -55,7 +55,7 @@ namespace LaunchPad
                     policy.Requirements.Add(new RoleRequirement("Administrator")));
                 options.AddPolicy("Author", policy =>
                     policy.Requirements.Add(new RoleRequirement("Author")));
-                options.AddPolicy("Launcher", policy => 
+                options.AddPolicy("Launcher", policy =>
                     policy.Requirements.Add(new RoleRequirement("Launcher")));
             });
             services.AddScoped<IAuthorizationHandler, RoleHandler>();

@@ -1,4 +1,6 @@
-﻿namespace LaunchPad.Models
+﻿using System.Collections.Generic;
+
+namespace LaunchPad.Models
 {
     public class Category
     {

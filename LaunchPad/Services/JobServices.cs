@@ -49,6 +49,7 @@ namespace LaunchPad.Services
         // Default Constructor For HangFire
         public JobServices()
         {
+            // disposable needs to be implemented
             var options = new DbContextOptionsBuilder<ApplicationDbContext>();
             options.UseSqlServer("Server=frcit-launchpad;Database=LaunchPad;Trusted_Connection=True;MultipleActiveResultSets=true"); // This needs to come from configuration. 
             _scriptRepository = new ScriptRepository(new ApplicationDbContext(options.Options));
@@ -103,20 +104,23 @@ namespace LaunchPad.Services
             initial.AuthorizationManager = new AuthorizationManager("Microsoft.PowerShell");
 
             //Create Runspace
-            var runspace = RunspaceFactory.CreateRunspace(initial);
-            runspace.Open();
+            using (var runspace = RunspaceFactory.CreateRunspace(initial))
+            {
+                runspace.Open();
 
-            //Create Pipeline
-            var pipeline = runspace.CreatePipeline();
+                //Create Pipeline
+                using (var pipeline = runspace.CreatePipeline())
+                {
+                    //Pass in the Scripts texts
+                    pipeline.Commands.AddScript(_scriptIO.Read(name));
+                    pipeline.Commands.Add("Out-String");
 
-            //Pass in the Scripts texts
-            pipeline.Commands.AddScript(_scriptIO.Read(name));
-            pipeline.Commands.Add("Out-String");
-
-            //Invoke and Save Results
-            var results = pipeline.Invoke();
-            SaveResults(name, results);
-            runspace.Close();
+                    //Invoke and Save Results
+                    var results = pipeline.Invoke();
+                    SaveResults(name, results);
+                    runspace.Close();
+                }
+            }
 
         }
 
@@ -134,35 +138,39 @@ namespace LaunchPad.Services
             initial.AuthorizationManager = new AuthorizationManager("Microsoft.PowerShell");
 
             //Create Runspace
-            var runspace = RunspaceFactory.CreateRunspace(initial);
-            runspace.Open();
-
-            //Create Pipeline
-            Pipeline pipeline = runspace.CreatePipeline();
-
-            //TODO: Testing - Please REMOVE!
-            var command = new Command(_scriptIO.FileLocation(name));
-
-            if (psParams != null)
+            using (var runspace = RunspaceFactory.CreateRunspace(initial))
             {
-                //TODO: DoEs This Need Item Key or Will Params Run in Order?
-                foreach (var item in psParams)
+                runspace.Open();
+
+                //Create Pipeline
+                using (Pipeline pipeline = runspace.CreatePipeline())
                 {
-                    command.Parameters.Add(null, item.Value);
+
+                    //TODO: Testing - Please REMOVE!
+                    var command = new Command(_scriptIO.FileLocation(name));
+
+                    if (psParams != null)
+                    {
+                        //TODO: DoEs This Need Item Key or Will Params Run in Order?
+                        foreach (var item in psParams)
+                        {
+                            command.Parameters.Add(null, item.Value);
+                        }
+                    }
+
+                    pipeline.Commands.Add(command);
+
+                    //Pass in the Scripts text
+                    //pipeline.Commands.AddScript(scriptContents); //Previous Way - would allow for script storage in DB
+                    pipeline.Commands.Add("Out-String");
+
+                    //Invoke and Save Results
+                    var results = pipeline.Invoke();
+                    SaveResults(name, results);
+
+                    runspace.Close();
                 }
             }
-
-            pipeline.Commands.Add(command);
-
-            //Pass in the Scripts text
-            //pipeline.Commands.AddScript(scriptContents); //Previous Way - would allow for script storage in DB
-            pipeline.Commands.Add("Out-String");
-
-            //Invoke and Save Results
-            var results = pipeline.Invoke();
-            SaveResults(name, results);
-
-            runspace.Close();
         }
 
         public void RunOnSchedule(int id, string name, string recurring, Dictionary<string, string> psParams, DateTime schedule)

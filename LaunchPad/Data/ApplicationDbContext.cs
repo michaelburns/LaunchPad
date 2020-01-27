@@ -17,6 +17,7 @@ namespace LaunchPad.Data
         public DbSet<User> Users { get; set; }
         public DbSet<Role> Roles { get; set; }
         public DbSet<UserRole> UserRoles { get; set; }
+        public DbSet<UserCategory> UserCategory { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -32,6 +33,14 @@ namespace LaunchPad.Data
                 .HasOne(r => r.Role)
                 .WithMany(r => r.UserRoles)
                 .HasForeignKey(r => r.RoleId);
+
+            modelBuilder.Entity<UserCategory>()
+                .HasKey(r => new { r.UserId, r.CategoryId });
+
+            modelBuilder.Entity<UserCategory>()
+                .HasOne(r => r.User)
+                .WithMany(r => r.Categories)
+                .HasForeignKey(r => r.UserId);
         }
     }
 }
