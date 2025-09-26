@@ -12,6 +12,9 @@
         <th>
             @Html.DisplayNameFor(model => model.Status)
         </th>
+        <th>
+            Export
+        </th>
     </tr>
 
     @foreach (var item in Model)
@@ -41,6 +44,9 @@
                     <a tabindex="0" job-id="@item.Id" action="JobDetails" class="jobModalButton btn btn-xs btn-success">@Html.DisplayFor(modelItem => item.Status)</a>
                 }
 
+            </td>
+            <td>
+                <a class="btn btn-xs btn-info" href="@Url.Action("DownloadJobOutput", "PowerShell", new { id = item.Id })">Download</a>
             </td>
         </tr>
     }

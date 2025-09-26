@@ -6,6 +6,7 @@
     @Html.DisplayFor(model => model.Outcome)
 </div>
 <div class="modal-footer">
+    <a class="btn btn-primary" href="@Url.Action("DownloadJobOutput", "PowerShell", new { id = Model.Id })">Download Output</a>
     <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
 </div>
 
