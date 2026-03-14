@@ -1,35 +1,31 @@
 # { Launch-Pad }
-[![npm](https://img.shields.io/npm/l/express.svg)](https://github.com/michaelburns/LaunchPad/blob/master/LICENSE) 
-[![Build status](https://ci.appveyor.com/api/projects/status/github/michaelburns/launchpad?branch=master&svg=true)](https://ci.appveyor.com/project/michaelburns/launchpad)
-[![Stories in Ready](https://badge.waffle.io/michaelburns/LaunchPad.png?label=ready&title=Ready)](https://waffle.io/michaelburns/LaunchPad)
-
+[![License: Proprietary](https://img.shields.io/badge/License-Non--Commercial-red.svg)](https://github.com/michaelburns/LaunchPad/blob/master/LICENSE)
 
 ### PowerShell Command Center
 ##### Automation for Everyone
 --------------
 
+ASP.NET Core MVC
 
-ASP.NET CORE 2.0 MVC
+A centralized web portal for managing, launching, and scheduling PowerShell scripts with role-based access control, auditing, and syntax highlighting.
 
-This project is looking for contributors. If you have a feature you'd like to see implemented or a bug you'd liked fixed, the best and fastest way to make that happen is to implement it and submit it back upstream for consideration. All contributions will be given thorough consideration.
-
-The project is not ready for production environments and should be used for testing only. 
+This project is looking for contributors. If you have a feature you'd like to see implemented or a bug you'd like fixed, the best and fastest way to make that happen is to implement it and submit it back upstream for consideration. All contributions will be given thorough consideration.
 
 #### Get started with v0.0.1-alpha
 - [Install Launch-Pad](https://github.com/michaelburns/LaunchPad/releases/download/v0.0.1-alpha/launch-pad.exe)
   - [Release Notes](https://github.com/michaelburns/LaunchPad/releases/tag/v0.0.1-alpha)
 
 
-#### Get started contributing in 3 easy steps:
-- [Install ASP.NET 5 RC1](https://get.asp.net/)  
-- Clone the project to [Visual Studio 2015](https://www.visualstudio.com/en-us/products/visual-studio-community-vs.aspx) or [Visual Studio Code](https://www.visualstudio.com/en-us/products/code-vs.aspx)
-  - There's even a [GitHub extension](https://visualstudio.github.com/)
-- Run the Entity Framework 7 commands from the ./src/LaunchPad directory 
-  - ``` dnx ef migrations add InitialDB ```
-  - ```dnx ef database update ```
-  
+#### Get started contributing:
+- Install the [.NET SDK](https://dotnet.microsoft.com/download)
+- Clone the project to [Visual Studio](https://visualstudio.microsoft.com/vs/community/) or [Visual Studio Code](https://code.visualstudio.com/)
+- Copy `appsettings.json` and configure your local database connection string
+- Run the Entity Framework migrations from the ./LaunchPad directory:
+  - `dotnet ef migrations add InitialDB`
+  - `dotnet ef database update`
+
 ##### Default Admin Account:
-Username: admin  
+Username: admin
 Password: Admin1234!
 
 
@@ -70,16 +66,19 @@ Password: Admin1234!
 --------------
 
 
-#### Planned Features
+#### Roadmap
 * Define custom end user roles (Exchange, Business Departments)
 * Publish scripts to dashboard for end users to launch/schedule scripts they need
 * Export and/or email script results
 * Email alerts on failures
-* Version Control
+* Version control for scripts
+* Migrate to modern .NET
 
 --------------
 
 
-#### Special Thanks To
-* [HangFire](http://hangfire.io/) for fire-and-forget tasks
-* [Ace.js](https://ace.c9.io/) editor for script editing and syntax highlighting
+#### Built With
+* [HangFire](https://www.hangfire.io/) - Background job processing
+* [Ace.js](https://ace.c9.io/) - Code editor with syntax highlighting
+* [Entity Framework Core](https://docs.microsoft.com/en-us/ef/core/) - Data access
+* [Bootstrap](https://getbootstrap.com/) - UI framework

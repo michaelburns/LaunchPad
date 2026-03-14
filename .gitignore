@@ -1,14 +1,36 @@
-﻿################################################################################
-# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+# .gitignore for LaunchPad - ASP.NET Core
 ################################################################################
 
-/LaunchPad/wwwroot/lib
-/LaunchPad/bin/Debug/net452/win7-x86
-/LaunchPad/obj
-/LaunchPad/Data/Migrations
-/.vs/LaunchPad/v15
-/.vs
+# Build outputs
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+
+# Visual Studio
+.vs/
 *.user
-/LaunchPad.sln.DotSettings.user
-/LaunchPad/Migrations
-/LaunchPad/bin
+*.suo
+*.userosscache
+*.sln.docstates
+LaunchPad.sln.DotSettings.user
+
+# NuGet
+*.nupkg
+**/packages/
+
+# Bower / npm
+LaunchPad/wwwroot/lib/
+node_modules/
+
+# Entity Framework Migrations
+LaunchPad/Data/Migrations/
+LaunchPad/Migrations/
+
+# User-specific configuration
+appsettings.*.local.json
+
+# OS files
+.DS_Store
+Thumbs.db

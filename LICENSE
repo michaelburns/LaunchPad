@@ -1,22 +1,64 @@
-The MIT License (MIT)
+LaunchPad Proprietary License
 
-Copyright (c) 2020 Michael Burns
+Copyright (c) 2026 Michael Burns. All Rights Reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+OWNERSHIP
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The software, including all source code, documentation, and associated
+files (collectively, the "Software"), is the exclusive property of
+Michael Burns. All rights not expressly granted herein are reserved.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+GRANT OF LICENSE
 
+Subject to the terms of this license, you are granted a limited,
+non-exclusive, non-transferable, revocable license to:
+
+  1. Use the Software for personal, educational, or non-commercial
+     purposes only.
+  2. Modify the Software for your own personal, non-commercial use.
+  3. Share the Software with others, provided this license is included
+     in all copies and the Software is not used for commercial purposes.
+
+RESTRICTIONS
+
+You may NOT, without prior written permission from Michael Burns:
+
+  1. Use the Software, in whole or in part, for any commercial purpose.
+     "Commercial purpose" includes, but is not limited to, use within a
+     business, use that generates revenue, use in a product or service
+     offered to customers, or use by a for-profit organization in its
+     operations.
+  2. Sell, sublicense, lease, or otherwise commercially distribute the
+     Software or any derivative works.
+  3. Remove or alter this license, any copyright notices, or any
+     attribution to Michael Burns.
+
+COMMERCIAL LICENSING
+
+Organizations or individuals wishing to use the Software for commercial
+purposes must obtain a separate commercial license. Contact Michael Burns
+to discuss commercial licensing terms.
+
+NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+IN NO EVENT SHALL MICHAEL BURNS BE LIABLE FOR ANY CLAIM, DAMAGES, OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE,
+ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+TERMINATION
+
+This license is effective until terminated. Your rights under this
+license will terminate automatically without notice if you fail to
+comply with any of its terms. Upon termination, you must destroy all
+copies of the Software in your possession.
+
+PRIOR VERSIONS
+
+Versions of this Software distributed prior to this license were made
+available under the MIT License. That grant applies only to those
+specific prior distributions. This license governs all versions from
+this release forward.
