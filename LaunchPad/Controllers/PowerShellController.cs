@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace LaunchPad.Controllers
 {
@@ -153,6 +154,28 @@ namespace LaunchPad.Controllers
             var job = _scriptRepository.GetJobById(id);
 
             return PartialView(job);
+        }
+
+        // GET: PowerShell/DownloadJobOutput/1
+        public IActionResult DownloadJobOutput(int id)
+        {
+            var job = _scriptRepository.GetJobById(id);
+            if (job == null)
+            {
+                return NotFound();
+            }
+
+            var script = _scriptRepository.GetScriptById(job.ScriptId);
+            if (script?.Category != null && !UserHasAccessToCategory(script.Category.Id))
+            {
+                return Forbid();
+            }
+
+            var fileName = $"Job_{job.Id}_Output_{job.Date:yyyyMMddHHmmss}.txt";
+            var outcome = job.Outcome ?? string.Empty;
+            var fileBytes = Encoding.UTF8.GetBytes(outcome);
+
+            return File(fileBytes, "text/plain", fileName);
         }
 
         // Job ActionResults
