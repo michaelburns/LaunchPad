@@ -41,3 +41,14 @@ appsettings.*.local.json
 # OS files
 .DS_Store
 Thumbs.db
+.smb-mount/
+.publish-stage/
+
+# Local publish output (created by deploy script; do not commit)
+publish/
+
+# Local deploy scripts (kept outside repo)
+deploy-*.sh
+
+# Publish profiles (machine/user-specific)
+**/PublishProfiles/
