@@ -206,7 +206,11 @@ namespace LaunchPad.Services
                     return;
                 }
 
-                var props = obj.Properties.Take(8).ToList();
+                // Capture up to 32 properties — far enough to cover Get-Process and
+                // similar wide objects without exploding row size on pathological cases.
+                // The renderer caps the *visible* column count at 8 by default, with a
+                // "+N more" reveal chip for the rest.
+                var props = obj.Properties.Take(32).ToList();
                 if (props.Count == 0)
                 {
                     AppendText(obj.ToString());

@@ -344,16 +344,45 @@
         text-transform: uppercase;
         letter-spacing: 0.12em;
         color: var(--fg-3);
+        flex: 0 0 auto;
+        white-space: nowrap;
     }
-    .seg-table__schema {
+    .seg-table__count .visible-of-total { color: var(--fg-2); }
+    .seg-table__filter {
+        flex: 0 1 18ch;
+        margin-left: auto;
+        background: var(--bg-1);
+        border: 1px solid var(--rule);
+        border-radius: 3px;
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-micro);
+        color: var(--fg-1);
+        padding: 0.15em 0.5em;
+        letter-spacing: 0;
+    }
+    .seg-table__filter::placeholder { color: var(--fg-3); }
+    .seg-table__filter:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-glow);
+        background: var(--bg-2);
+    }
+    .seg-table__more {
+        flex: 0 0 auto;
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
         font-size: var(--t-micro);
         color: var(--fg-3);
-        margin-left: auto;
-        max-width: 50%;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        background: transparent;
+        border: 1px solid var(--rule);
+        border-radius: 3px;
+        padding: 0.15em 0.45em;
+        cursor: pointer;
+        letter-spacing: 0;
     }
+    .seg-table__more:hover { color: var(--fg-1); border-color: var(--rule-strong); }
+    .seg-table__more.is-active { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 50%, var(--rule-strong)); }
     .seg-table__scroll {
         max-height: 320px;
         overflow: auto;
@@ -375,11 +404,41 @@
         letter-spacing: 0;
         color: var(--fg-2);
         font-weight: 600;
-        padding: 0.45em 0.8em;
+        padding: 0.45em 1.4em 0.45em 0.8em;
         background: oklch(13% 0.014 260);
         border-bottom: 1px solid var(--rule);
         white-space: nowrap;
+        cursor: pointer;
+        user-select: none;
+        position: sticky;
+        transition: color 100ms linear;
     }
+    .seg-table thead th:hover { color: var(--fg-1); }
+    .seg-table thead th::after {
+        content: "↕";
+        position: absolute;
+        right: 0.5em;
+        top: 50%;
+        transform: translateY(-50%);
+        opacity: 0;
+        color: var(--fg-3);
+        font-size: 0.85em;
+        transition: opacity 100ms linear;
+    }
+    .seg-table thead th:hover::after { opacity: 0.5; }
+    .seg-table thead th.is-sorted { color: var(--fg-0); }
+    .seg-table thead th.is-sorted::after {
+        content: "▴";
+        opacity: 1;
+        color: var(--accent);
+    }
+    .seg-table thead th.is-sorted.is-sort-desc::after { content: "▾"; }
+    /* Hidden column reveal: cells in [data-extra] columns are display:none until
+       the parent table gets the .all-cols class via the +N more chip. */
+    .seg-table:not(.all-cols) th[data-extra="1"],
+    .seg-table:not(.all-cols) td[data-extra="1"] { display: none; }
+    /* Filtered rows hide via display:none — sort comparisons skip them. */
+    .seg-table tbody tr[hidden] { display: none; }
     .seg-table tbody td {
         padding: 0.4em 0.8em;
         border-bottom: 1px solid color-mix(in oklab, var(--rule) 50%, transparent);

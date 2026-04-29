@@ -559,6 +559,8 @@
       return String(v);
     };
 
+    const VISIBLE_COL_CAP = 8;
+
     const renderSegmentsHtml = (segments) => segments.map((seg) => {
       if (seg.t === 'text') {
         const v = seg.v || '';
@@ -568,27 +570,44 @@
       if (seg.t === 'table') {
         const cols = seg.cols || [];
         const rows = seg.rows || [];
-        const colsHtml = cols.map((c) => `<th>${escapeHtml(c)}</th>`).join('');
+        const totalCols = cols.length;
+        const hasExtras = totalCols > VISIBLE_COL_CAP;
+
+        const colsHtml = cols.map((c, i) => {
+          const extra = (hasExtras && i >= VISIBLE_COL_CAP) ? ' data-extra="1"' : '';
+          return `<th data-col-idx="${i}"${extra}>${escapeHtml(c)}</th>`;
+        }).join('');
+
         const rowsHtml = rows.map((row) => {
           const tds = cols.map((_, i) => {
             const v = row[i];
             const cls = cellClass(v);
             const text = escapeHtml(cellDisplay(v));
             const title = (v !== null && v !== undefined) ? ` title="${escapeHtml(String(v))}"` : '';
-            return `<td class="${cls}"${title}>${text}</td>`;
+            const extra = (hasExtras && i >= VISIBLE_COL_CAP) ? ' data-extra="1"' : '';
+            return `<td class="${cls}"${title}${extra}>${text}</td>`;
           }).join('');
           return `<tr>${tds}</tr>`;
         }).join('');
-        const schema = cols.length > 0 ? cols.join(' · ') : '';
+
+        const visibleCols = hasExtras ? VISIBLE_COL_CAP : totalCols;
+        const moreChip = hasExtras
+          ? `<button type="button" class="seg-table__more" data-more aria-pressed="false">+${totalCols - VISIBLE_COL_CAP} more cols</button>`
+          : '';
+        const filterInput = rows.length > 4
+          ? '<input type="search" class="seg-table__filter" placeholder="filter…" autocomplete="off" spellcheck="false" aria-label="Filter rows">'
+          : '';
+
         return ''
-          + '<div class="seg-table">'
+          + '<div class="seg-table" data-row-count="' + rows.length + '" data-visible-cap="' + visibleCols + '">'
           + '<div class="seg-table__head">'
-          + `<span class="seg-table__count">${rows.length} ${rows.length === 1 ? 'row' : 'rows'}</span>`
-          + (schema ? `<span class="seg-table__schema">${escapeHtml(schema)}</span>` : '')
+          +   `<span class="seg-table__count"><span class="visible-of-total" data-visible-count>${rows.length}</span> / ${rows.length} ${rows.length === 1 ? 'row' : 'rows'}</span>`
+          +   moreChip
+          +   filterInput
           + '</div>'
           + '<div class="seg-table__scroll"><table>'
-          + `<thead><tr>${colsHtml}</tr></thead>`
-          + `<tbody>${rowsHtml}</tbody>`
+          +   `<thead><tr>${colsHtml}</tr></thead>`
+          +   `<tbody>${rowsHtml}</tbody>`
           + '</table></div>'
           + '</div>';
       }
@@ -664,6 +683,128 @@
       lastRendered = raw;
       renderInto(raw || '', outputMode);
     };
+
+    // ---------- Table interactions: sort / filter / more cols ----
+    // Delegated handlers on the output block. State (sort, filter, all-cols) lives
+    // on the .seg-table element via dataset; heartbeat repaints reset it (acceptable
+    // tradeoff — operators interact with tables on completed runs, not mid-stream).
+    const sortValue = (cell) => {
+      if (!cell) return null;
+      const cls = cell.className || '';
+      const text = cell.getAttribute('title') ?? cell.textContent;
+      if (cls.includes('is-null')) return [3, 0]; // nulls sort last
+      if (cls.includes('is-num')) {
+        const n = parseFloat(text);
+        return [0, isNaN(n) ? 0 : n];
+      }
+      if (cls.includes('is-bool-true'))  return [1, 0];
+      if (cls.includes('is-bool-false')) return [1, 1];
+      return [2, String(text).toLowerCase()];
+    };
+
+    const compareKeys = (a, b) => {
+      if (a[0] !== b[0]) return a[0] - b[0];
+      if (typeof a[1] === 'number' && typeof b[1] === 'number') return a[1] - b[1];
+      return String(a[1]).localeCompare(String(b[1]));
+    };
+
+    const sortTable = (table, colIdx, dir) => {
+      const tbody = table.querySelector('tbody');
+      if (!tbody) return;
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      rows.sort((tra, trb) => {
+        const a = sortValue(tra.cells[colIdx]);
+        const b = sortValue(trb.cells[colIdx]);
+        const cmp = compareKeys(a, b);
+        return dir === 'desc' ? -cmp : cmp;
+      });
+      rows.forEach((r) => tbody.appendChild(r));
+      // Update header indicator
+      table.querySelectorAll('thead th').forEach((th, i) => {
+        const active = i === colIdx;
+        th.classList.toggle('is-sorted', active);
+        th.classList.toggle('is-sort-desc', active && dir === 'desc');
+      });
+      table.dataset.sortCol = String(colIdx);
+      table.dataset.sortDir = dir || '';
+    };
+
+    const restoreSort = (table) => {
+      // Restore "natural" insertion order. We don't persist the original index in
+      // each row, so this is best-effort: clear indicators and let the next manual
+      // sort happen from the now-shuffled state.
+      table.querySelectorAll('thead th').forEach((th) => {
+        th.classList.remove('is-sorted', 'is-sort-desc');
+      });
+      delete table.dataset.sortCol;
+      delete table.dataset.sortDir;
+    };
+
+    const applyFilterToTable = (segTable) => {
+      const input = segTable.querySelector('.seg-table__filter');
+      const needle = (input && input.value || '').trim().toLowerCase();
+      const rows = segTable.querySelectorAll('tbody tr');
+      let visible = 0;
+      rows.forEach((tr) => {
+        if (!needle) {
+          tr.removeAttribute('hidden');
+          visible++;
+          return;
+        }
+        const hay = Array.from(tr.cells).map((c) => c.textContent.toLowerCase()).join(' ');
+        const match = hay.includes(needle);
+        if (match) { tr.removeAttribute('hidden'); visible++; }
+        else { tr.setAttribute('hidden', ''); }
+      });
+      const counter = segTable.querySelector('[data-visible-count]');
+      if (counter) counter.textContent = String(visible);
+    };
+
+    if (outputEl) {
+      outputEl.addEventListener('click', (e) => {
+        // Sort
+        const th = e.target.closest('.seg-table thead th[data-col-idx]');
+        if (th) {
+          const segTable = th.closest('.seg-table');
+          const idx = parseInt(th.getAttribute('data-col-idx'), 10);
+          const curCol = parseInt(segTable.dataset.sortCol ?? '-1', 10);
+          const curDir = segTable.dataset.sortDir || '';
+          let nextDir;
+          if (curCol === idx) {
+            if (curDir === 'asc') nextDir = 'desc';
+            else if (curDir === 'desc') nextDir = ''; // third click clears
+            else nextDir = 'asc';
+          } else {
+            nextDir = 'asc';
+          }
+          if (nextDir === '') restoreSort(segTable);
+          else sortTable(segTable, idx, nextDir);
+          return;
+        }
+        // More cols toggle
+        const moreBtn = e.target.closest('.seg-table__more');
+        if (moreBtn) {
+          const segTable = moreBtn.closest('.seg-table');
+          const showing = segTable.classList.toggle('all-cols');
+          moreBtn.classList.toggle('is-active', showing);
+          moreBtn.setAttribute('aria-pressed', showing ? 'true' : 'false');
+          if (showing) {
+            const total = segTable.querySelectorAll('thead th').length;
+            moreBtn.textContent = `hide ${total - VISIBLE_COL_CAP} cols`;
+          } else {
+            const total = segTable.querySelectorAll('thead th').length;
+            moreBtn.textContent = `+${total - VISIBLE_COL_CAP} more cols`;
+          }
+        }
+      });
+
+      outputEl.addEventListener('input', (e) => {
+        if (e.target.matches('.seg-table__filter')) {
+          const segTable = e.target.closest('.seg-table');
+          applyFilterToTable(segTable);
+        }
+      });
+    }
 
     // Initial paint from the server-rendered data-output-raw attribute (so the page
     // shows the outcome correctly before the first heartbeat tick lands).
