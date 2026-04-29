@@ -116,7 +116,7 @@
       paletteOutput.setAttribute('hidden', '');
       paletteOutput.innerHTML = '';
       paletteHint.innerHTML =
-        '<kbd class="accent">⇧↵</kbd> run · <kbd>esc</kbd> cancel · <span class="accent">admin</span> · runs on this host';
+        '<kbd class="accent">⇧↵</kbd> or <kbd class="accent">⌘↵</kbd> run · <kbd>esc</kbd> cancel · <span class="accent">admin</span> · runs on this host';
     } else {
       paletteEl.classList.remove('is-adhoc');
       paletteInput.removeAttribute('hidden');
@@ -124,7 +124,9 @@
       palettePs.setAttribute('hidden', '');
       paletteSect.removeAttribute('hidden');
       paletteOutput.setAttribute('hidden', '');
-      paletteHint.innerHTML = '<kbd>↑↓</kbd> move · <kbd>↵</kbd> open · <kbd>esc</kbd> close';
+      paletteHint.innerHTML = paletteIsAdmin
+        ? '<kbd>↑↓</kbd> move · <kbd>↵</kbd> open · <kbd>&gt;</kbd> run powershell · <kbd>esc</kbd> close'
+        : '<kbd>↑↓</kbd> move · <kbd>↵</kbd> open · <kbd>esc</kbd> close';
     }
   }
 
@@ -159,7 +161,7 @@
       html += '<div class="palette__section"><span class="palette__section-label">recent</span>';
       recents.forEach((r) => {
         const idx = paletteState.visibleRows.length;
-        paletteState.visibleRows.push({ kind: 'launch', id: r.id, name: r.name });
+        paletteState.visibleRows.push({ kind: 'open', id: r.id, name: r.name });
         html += rowHtml(idx, '▶', r.name, `${r.count}× last 7d`, '↵');
       });
       html += '</div>';
@@ -221,11 +223,10 @@
   function activateRow(idx) {
     const row = paletteState.visibleRows[idx];
     if (!row) return;
-    if (row.kind === 'launch') {
-      // Launch a saved script — submit the same Run POST the home roster uses.
-      submitLaunch(row.id);
-      return;
-    }
+    // The palette is a navigation surface, not a launcher. Selecting a script
+    // takes the operator to its Details page, where launch is a deliberate
+    // arm-then-fire click. Ad-hoc PowerShell (`>` mode) is the only execution
+    // path in the palette itself.
     if (row.kind === 'open') {
       window.location.href = '/PowerShell/Details/' + encodeURIComponent(row.id);
       return;
@@ -236,35 +237,18 @@
     }
   }
 
-  function submitLaunch(scriptId) {
-    // Find the antiforgery token from any form on the page (every page has one
-    // because the topbar/shortcuts include forms; if none, fall back to a fresh
-    // GET that pulls one).
-    const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
-    if (!tokenInput) {
-      // No token on this page — navigate to Details where launching is deliberate.
-      window.location.href = '/PowerShell/Details/' + encodeURIComponent(scriptId);
-      return;
-    }
-    const f = document.createElement('form');
-    f.method = 'post';
-    f.action = '/PowerShell/Run/' + encodeURIComponent(scriptId);
-    f.style.display = 'none';
-    const t = document.createElement('input');
-    t.type = 'hidden';
-    t.name = '__RequestVerificationToken';
-    t.value = tokenInput.value;
-    f.appendChild(t);
-    document.body.appendChild(f);
-    f.submit();
-  }
-
   async function submitAdHoc(snippet) {
-    const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
-    if (!tokenInput) { console.warn('no antiforgery token'); return; }
+    // Token lives inside the palette container itself — the palette can be opened
+    // from any page and most pages don't render their own form, so we don't rely
+    // on a sibling token elsewhere on the page.
+    const tokenInput = paletteEl.querySelector('input[name="__RequestVerificationToken"]');
     paletteOutput.removeAttribute('hidden');
     paletteSect.setAttribute('hidden', '');
-    paletteOutput.innerHTML = '<pre class="seg-text">$ submitting…</pre>';
+    if (!tokenInput) {
+      paletteOutput.innerHTML = '<pre class="seg-text">ERROR: no antiforgery token in palette markup. reload the page.</pre>';
+      return;
+    }
+    paletteOutput.innerHTML = `<pre class="seg-source">${escapeHtml(snippet)}</pre><pre class="seg-text">$ submitting…</pre>`;
 
     const fd = new URLSearchParams();
     fd.set('snippet', snippet);
@@ -284,7 +268,7 @@
     }
     if (!res.ok) {
       const txt = await res.text();
-      paletteOutput.innerHTML = `<pre class="seg-text">ERROR: ${escapeHtml(txt)}</pre>`;
+      paletteOutput.innerHTML = `<pre class="seg-text">ERROR ${res.status}: ${escapeHtml(txt)}</pre>`;
       return;
     }
     const data = await res.json();
@@ -402,7 +386,7 @@
       if (!Number.isNaN(idx)) activateRow(idx);
     });
 
-    // Ad-hoc PowerShell input — Shift+Enter to run, Esc to back out.
+    // Ad-hoc PowerShell input — ⇧↵, ⌘↵, or Ctrl+↵ to run; Esc to back out.
     palettePs.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -413,7 +397,10 @@
         setPaletteMode('search');
         paletteInput.value = '';
         paletteInput.focus();
-      } else if (e.key === 'Enter' && e.shiftKey) {
+        return;
+      }
+      const isRunCombo = e.key === 'Enter' && (e.shiftKey || e.metaKey || e.ctrlKey);
+      if (isRunCombo) {
         e.preventDefault();
         const snippet = palettePs.value.trim();
         if (snippet) submitAdHoc(snippet);

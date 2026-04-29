@@ -205,7 +205,13 @@ namespace LaunchPad.Services
                 if (props.Count == 0) { AppendText(obj.ToString()); return; }
 
                 var cols = props.Select(p => p.Name).ToList();
-                var row  = props.Select(p => CoerceAdHocValue(p.Value)).ToList();
+                // Property read can throw — e.g. Process.StartTime is privileged on
+                // macOS for processes you don't own. Treat unreachable values as null
+                // so the cell renders as ∅ rather than emitting an ERROR stream entry.
+                var row = props.Select(p => {
+                    try { return CoerceAdHocValue(p.Value); }
+                    catch { return (object?)null; }
+                }).ToList();
                 lock (segLock)
                 {
                     var last = segments.Count > 0 ? segments[^1] : null;
@@ -442,7 +448,13 @@ namespace LaunchPad.Services
                 }
 
                 var cols = props.Select(p => p.Name).ToList();
-                var row = props.Select(p => CoerceValue(p.Value)).ToList();
+                // Property read can throw — e.g. Process.StartTime is privileged on
+                // macOS for processes you don't own. Treat unreachable values as null
+                // so the cell renders as ∅ rather than emitting an ERROR stream entry.
+                var row = props.Select(p => {
+                    try { return CoerceValue(p.Value); }
+                    catch { return (object?)null; }
+                }).ToList();
 
                 lock (segLock)
                 {

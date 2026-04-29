@@ -175,6 +175,10 @@
 </div>
 
 <div class="palette" hidden aria-hidden="true" role="dialog" aria-label="Command palette" data-palette data-palette-admin="@(isAdmin ? "true" : "false")">
+    @* Antiforgery token for the ad-hoc POST. The palette can be opened from any
+       page and most pages don't render their own form, so we ship a token with the
+       palette itself rather than scraping one from a sibling form. *@
+    @Html.AntiForgeryToken()
     <div class="palette__panel">
         <div class="palette__head">
             <span class="palette__caret" aria-hidden="true" data-palette-caret>›</span>
