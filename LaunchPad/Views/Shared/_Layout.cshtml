@@ -65,6 +65,10 @@
 
         <span class="topbar__spacer"></span>
 
+        <button type="button" class="topbar__cmd" data-palette-open aria-label="Open command palette (⌘K)" title="Open command palette (⌘K)">
+            <span aria-hidden="true" data-kbd-cmd>⌘K</span>
+        </button>
+
         <button type="button" class="topbar__help" data-shortcuts-toggle aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">
             <span aria-hidden="true">?</span>
         </button>
@@ -142,7 +146,7 @@
                 <dt><kbd>/</kbd></dt><dd>focus filter</dd>
                 <dt><kbd>j</kbd> <kbd>k</kbd></dt><dd>next / previous row</dd>
                 <dt><kbd>↵</kbd></dt><dd>open selected script</dd>
-                <dt><kbd>⌘K</kbd></dt><dd>focus filter</dd>
+                <dt><kbd>⌘K</kbd></dt><dd>open command palette</dd>
                 <dt><kbd>g</kbd> <kbd>h</kbd></dt><dd>go to scripts</dd>
                 <dt><kbd>g</kbd> <kbd>a</kbd></dt><dd>go to audit</dd>
                 @if (isAdmin)
@@ -166,6 +170,40 @@
                 <dt>status</dt><dd><span class="status" data-state="running">running</span> active now · <span class="status" data-state="completed">completed</span> finished cleanly · <span class="status" data-state="failed">failed</span> threw an error · <span class="status" data-state="scheduled">scheduled</span> queued · <span class="status" data-state="warning">cancelled</span> stopped.</dd>
                 <dt>amber pulse</dt><dd>not a warning. it's the running indicator — sodium-amber, the colour of a runway light.</dd>
             </dl>
+        </div>
+    </div>
+</div>
+
+<div class="palette" hidden aria-hidden="true" role="dialog" aria-label="Command palette" data-palette data-palette-admin="@(isAdmin ? "true" : "false")">
+    <div class="palette__panel">
+        <div class="palette__head">
+            <span class="palette__caret" aria-hidden="true" data-palette-caret>›</span>
+            <input type="text"
+                   class="palette__input"
+                   data-palette-input
+                   placeholder="@(isAdmin ? "type a script name, or > to run powershell" : "type a script name, action, or category")"
+                   autocomplete="off"
+                   spellcheck="false"
+                   aria-label="Palette search" />
+            <button type="button" class="palette__close" data-palette-close aria-label="Close (esc)" title="esc">esc</button>
+        </div>
+
+        <textarea class="palette__powershell"
+                  data-palette-powershell
+                  hidden
+                  spellcheck="false"
+                  autocomplete="off"
+                  aria-label="Ad-hoc PowerShell"
+                  placeholder="Get-Process | Sort CPU -Desc | Select -First 5"></textarea>
+
+        <div class="palette__body" data-palette-body>
+            <div class="palette__loading" data-palette-loading hidden>loading…</div>
+            <div class="palette__sections" data-palette-sections></div>
+            <div class="palette__output" data-palette-output hidden></div>
+        </div>
+
+        <div class="palette__foot" data-palette-foot>
+            <span class="palette__hint" data-palette-hint>↑↓ move · ↵ run · esc close</span>
         </div>
     </div>
 </div>

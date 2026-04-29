@@ -31,6 +31,396 @@
     Failed: 'fail', Scheduled: 'sch', Recurring: 'rec', Cancelled: 'cnl'
   };
 
+  // ---------- Command palette ----------------------------------
+  // Universal ⌘K palette: navigate, search, launch saved scripts, and (admin only)
+  // run ad-hoc PowerShell with `> snippet`. Output streams in place via the same
+  // typed-segment renderer used on Details. Lazy-loads its data on first open.
+
+  const paletteEl = document.querySelector('[data-palette]');
+  const paletteIsAdmin = paletteEl && paletteEl.getAttribute('data-palette-admin') === 'true';
+
+  const paletteState = {
+    loaded: false,
+    data: null,            // { recents: [...], scripts: [...] }
+    activeIndex: 0,
+    visibleRows: [],       // current navigable row data, in DOM order
+    mode: 'search',        // 'search' | 'adhoc'
+    runningJobId: null,    // when ad-hoc is running
+    pollHandle: null,
+  };
+
+  const paletteInput   = paletteEl && paletteEl.querySelector('[data-palette-input]');
+  const paletteCaret   = paletteEl && paletteEl.querySelector('[data-palette-caret]');
+  const palettePs      = paletteEl && paletteEl.querySelector('[data-palette-powershell]');
+  const paletteBody    = paletteEl && paletteEl.querySelector('[data-palette-body]');
+  const paletteSect    = paletteEl && paletteEl.querySelector('[data-palette-sections]');
+  const paletteOutput  = paletteEl && paletteEl.querySelector('[data-palette-output]');
+  const paletteLoading = paletteEl && paletteEl.querySelector('[data-palette-loading]');
+  const paletteHint    = paletteEl && paletteEl.querySelector('[data-palette-hint]');
+
+  function openPalette() {
+    if (!paletteEl) return;
+    if (!paletteEl.hasAttribute('hidden')) return; // already open
+    paletteEl.removeAttribute('hidden');
+    paletteEl.setAttribute('aria-hidden', 'false');
+    if (!paletteState.loaded) {
+      loadPaletteData();
+    } else {
+      renderPaletteSections('');
+    }
+    setPaletteMode('search');
+    paletteInput.value = '';
+    paletteInput.focus();
+  }
+
+  function closePalette() {
+    if (!paletteEl || paletteEl.hasAttribute('hidden')) return;
+    if (paletteState.pollHandle) {
+      clearInterval(paletteState.pollHandle);
+      paletteState.pollHandle = null;
+    }
+    paletteEl.setAttribute('hidden', '');
+    paletteEl.setAttribute('aria-hidden', 'true');
+    paletteEl.classList.remove('is-adhoc');
+  }
+
+  async function loadPaletteData() {
+    if (!paletteLoading || !paletteSect) return;
+    paletteLoading.removeAttribute('hidden');
+    paletteSect.setAttribute('hidden', '');
+    try {
+      const res = await fetch('/Home/PaletteData', { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('palette data ' + res.status);
+      paletteState.data = await res.json();
+      paletteState.loaded = true;
+    } catch (_) {
+      paletteState.data = { recents: [], scripts: [] };
+      paletteState.loaded = true;
+    } finally {
+      paletteLoading.setAttribute('hidden', '');
+      paletteSect.removeAttribute('hidden');
+      renderPaletteSections('');
+    }
+  }
+
+  function setPaletteMode(mode) {
+    paletteState.mode = mode;
+    if (mode === 'adhoc') {
+      paletteEl.classList.add('is-adhoc');
+      paletteInput.setAttribute('hidden', '');
+      paletteCaret.textContent = '›';
+      palettePs.removeAttribute('hidden');
+      palettePs.value = '';
+      palettePs.focus();
+      paletteSect.setAttribute('hidden', '');
+      paletteOutput.setAttribute('hidden', '');
+      paletteOutput.innerHTML = '';
+      paletteHint.innerHTML =
+        '<kbd class="accent">⇧↵</kbd> run · <kbd>esc</kbd> cancel · <span class="accent">admin</span> · runs on this host';
+    } else {
+      paletteEl.classList.remove('is-adhoc');
+      paletteInput.removeAttribute('hidden');
+      paletteCaret.textContent = '›';
+      palettePs.setAttribute('hidden', '');
+      paletteSect.removeAttribute('hidden');
+      paletteOutput.setAttribute('hidden', '');
+      paletteHint.innerHTML = '<kbd>↑↓</kbd> move · <kbd>↵</kbd> open · <kbd>esc</kbd> close';
+    }
+  }
+
+  function renderPaletteSections(query) {
+    if (!paletteSect || !paletteState.data) return;
+    const q = (query || '').trim().toLowerCase();
+    const data = paletteState.data;
+
+    let recents = data.recents || [];
+    let scripts = data.scripts || [];
+    if (q) {
+      recents = recents.filter((r) => (r.name || '').toLowerCase().includes(q));
+      scripts = scripts.filter((s) => (s.name || '').toLowerCase().includes(q)
+                                  || (s.category || '').toLowerCase().includes(q));
+    }
+
+    const actions = paletteIsAdmin
+      ? [
+          { kind: 'action', glyph: '+', label: 'new script…',     href: '/PowerShell/Create' },
+          { kind: 'action', glyph: '@', label: 'manage users…',   href: '/Admin/UserList' },
+          { kind: 'action', glyph: '◇', label: 'manage categories…', href: '/Admin/CategoryList' },
+          { kind: 'action', glyph: '⌗', label: 'open audit',      href: '/Scripts/Jobs' },
+        ].filter((a) => !q || a.label.toLowerCase().includes(q))
+      : [
+          { kind: 'action', glyph: '⌗', label: 'open audit',      href: '/Scripts/Jobs' },
+        ];
+
+    paletteState.visibleRows = [];
+    let html = '';
+
+    if (recents.length) {
+      html += '<div class="palette__section"><span class="palette__section-label">recent</span>';
+      recents.forEach((r) => {
+        const idx = paletteState.visibleRows.length;
+        paletteState.visibleRows.push({ kind: 'launch', id: r.id, name: r.name });
+        html += rowHtml(idx, '▶', r.name, `${r.count}× last 7d`, '↵');
+      });
+      html += '</div>';
+    }
+
+    if (scripts.length) {
+      html += '<div class="palette__section"><span class="palette__section-label">scripts</span>';
+      scripts.forEach((s) => {
+        const idx = paletteState.visibleRows.length;
+        paletteState.visibleRows.push({ kind: 'open', id: s.id, name: s.name });
+        html += rowHtml(idx, ' ', s.name, s.category || '', '↵');
+      });
+      html += '</div>';
+    }
+
+    if (actions.length) {
+      html += '<div class="palette__section"><span class="palette__section-label">actions</span>';
+      actions.forEach((a) => {
+        const idx = paletteState.visibleRows.length;
+        paletteState.visibleRows.push({ kind: 'nav', href: a.href, name: a.label });
+        html += rowHtml(idx, a.glyph, a.label, '', '↵');
+      });
+      html += '</div>';
+    }
+
+    if (paletteState.visibleRows.length === 0) {
+      const tip = paletteIsAdmin
+        ? 'no matches — type <kbd>&gt;</kbd> to run powershell'
+        : 'no matches — try a different keyword';
+      html = '<div class="palette__empty">' + tip + '</div>';
+    }
+
+    paletteSect.innerHTML = html;
+    paletteState.activeIndex = 0;
+    renderPaletteActive();
+  }
+
+  function rowHtml(idx, glyph, label, meta, kbd) {
+    return ''
+      + `<div class="palette__row" data-idx="${idx}">`
+      +   `<span class="glyph">${escapeHtml(glyph || ' ')}</span>`
+      +   `<span class="label">${escapeHtml(label)}</span>`
+      +   (meta ? `<span class="meta">${escapeHtml(meta)}</span>` : '')
+      +   `<span class="kbd-hint">${escapeHtml(kbd)}</span>`
+      + '</div>';
+  }
+
+  function renderPaletteActive() {
+    if (!paletteSect) return;
+    const rows = paletteSect.querySelectorAll('.palette__row');
+    rows.forEach((el, i) => {
+      el.classList.toggle('is-active', i === paletteState.activeIndex);
+    });
+    if (rows[paletteState.activeIndex]) {
+      rows[paletteState.activeIndex].scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  function activateRow(idx) {
+    const row = paletteState.visibleRows[idx];
+    if (!row) return;
+    if (row.kind === 'launch') {
+      // Launch a saved script — submit the same Run POST the home roster uses.
+      submitLaunch(row.id);
+      return;
+    }
+    if (row.kind === 'open') {
+      window.location.href = '/PowerShell/Details/' + encodeURIComponent(row.id);
+      return;
+    }
+    if (row.kind === 'nav') {
+      window.location.href = row.href;
+      return;
+    }
+  }
+
+  function submitLaunch(scriptId) {
+    // Find the antiforgery token from any form on the page (every page has one
+    // because the topbar/shortcuts include forms; if none, fall back to a fresh
+    // GET that pulls one).
+    const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+    if (!tokenInput) {
+      // No token on this page — navigate to Details where launching is deliberate.
+      window.location.href = '/PowerShell/Details/' + encodeURIComponent(scriptId);
+      return;
+    }
+    const f = document.createElement('form');
+    f.method = 'post';
+    f.action = '/PowerShell/Run/' + encodeURIComponent(scriptId);
+    f.style.display = 'none';
+    const t = document.createElement('input');
+    t.type = 'hidden';
+    t.name = '__RequestVerificationToken';
+    t.value = tokenInput.value;
+    f.appendChild(t);
+    document.body.appendChild(f);
+    f.submit();
+  }
+
+  async function submitAdHoc(snippet) {
+    const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+    if (!tokenInput) { console.warn('no antiforgery token'); return; }
+    paletteOutput.removeAttribute('hidden');
+    paletteSect.setAttribute('hidden', '');
+    paletteOutput.innerHTML = '<pre class="seg-text">$ submitting…</pre>';
+
+    const fd = new URLSearchParams();
+    fd.set('snippet', snippet);
+    fd.set('__RequestVerificationToken', tokenInput.value);
+
+    let res;
+    try {
+      res = await fetch('/PowerShell/AdHoc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: fd.toString(),
+        credentials: 'same-origin',
+      });
+    } catch (e) {
+      paletteOutput.innerHTML = `<pre class="seg-text">ERROR: ${escapeHtml(e.message)}</pre>`;
+      return;
+    }
+    if (!res.ok) {
+      const txt = await res.text();
+      paletteOutput.innerHTML = `<pre class="seg-text">ERROR: ${escapeHtml(txt)}</pre>`;
+      return;
+    }
+    const data = await res.json();
+    paletteState.runningJobId = data.jobId;
+
+    // Poll JobPulse every 1.2s; render the segments inline.
+    const tick = async () => {
+      try {
+        const r = await fetch('/PowerShell/JobPulse/' + paletteState.runningJobId, { credentials: 'same-origin' });
+        if (!r.ok) return;
+        const j = await r.json();
+        renderPaletteOutput(j.outcome || '');
+        if (j.status === 'Completed' || j.status === 'Failed' || j.status === 'Cancelled') {
+          if (paletteState.pollHandle) clearInterval(paletteState.pollHandle);
+          paletteState.pollHandle = null;
+          paletteHint.innerHTML =
+            `${j.status.toLowerCase()} · <kbd>esc</kbd> close · <kbd>⇧↵</kbd> run another`;
+        }
+      } catch (_) {}
+    };
+    tick();
+    paletteState.pollHandle = setInterval(tick, 1200);
+  }
+
+  function renderPaletteOutput(raw) {
+    if (!paletteOutput) return;
+    let segments = null;
+    if (raw && (raw[0] === '[' || raw[0] === '{')) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) segments = parsed;
+      } catch (_) {}
+    }
+    if (!segments) {
+      paletteOutput.innerHTML = `<pre class="seg-text">${escapeHtml(raw || '$ waiting for output…')}</pre>`;
+      return;
+    }
+    paletteOutput.innerHTML = segments.map((seg) => {
+      if (seg.t === 'source') {
+        return `<pre class="seg-source">${escapeHtml(seg.v || '')}</pre>`;
+      }
+      if (seg.t === 'text') {
+        return `<pre class="seg-text">${escapeHtml(seg.v || '')}</pre>`;
+      }
+      if (seg.t === 'table') {
+        // Use the same table render as Details — see renderSegmentsHtml in the
+        // outputEl block. Inline a slim version here so we don't depend on
+        // outputEl being present on this page.
+        const cols = seg.cols || [];
+        const rows = seg.rows || [];
+        const colsHtml = cols.map((c) => `<th>${escapeHtml(c)}</th>`).join('');
+        const rowsHtml = rows.map((row) =>
+          `<tr>${cols.map((_, i) => {
+            const v = row[i];
+            const text = v === null || v === undefined ? '∅' : escapeHtml(String(v));
+            return `<td>${text}</td>`;
+          }).join('')}</tr>`
+        ).join('');
+        return `<div class="seg-table">`
+          + `<div class="seg-table__head"><span class="seg-table__count">${rows.length} ${rows.length === 1 ? 'row' : 'rows'}</span></div>`
+          + `<div class="seg-table__scroll"><table><thead><tr>${colsHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></div>`
+          + `</div>`;
+      }
+      return '';
+    }).join('');
+    paletteOutput.scrollTop = paletteOutput.scrollHeight;
+  }
+
+  if (paletteEl) {
+    // Open via the topbar chip.
+    document.querySelectorAll('[data-palette-open]').forEach((b) =>
+      b.addEventListener('click', () => openPalette()));
+
+    // Close button + click outside the panel.
+    paletteEl.addEventListener('click', (e) => {
+      if (e.target === paletteEl) closePalette();
+      if (e.target.closest('[data-palette-close]')) closePalette();
+    });
+
+    // Search input typing → re-render sections, or flip into ad-hoc mode on `>`
+    paletteInput.addEventListener('input', (e) => {
+      const v = e.target.value;
+      if (paletteIsAdmin && v.startsWith('>')) {
+        // Strip the `>` and seed the ad-hoc input with whatever followed
+        const seed = v.slice(1).replace(/^\s+/, '');
+        setPaletteMode('adhoc');
+        if (seed) palettePs.value = seed;
+        return;
+      }
+      renderPaletteSections(v);
+    });
+
+    paletteInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); closePalette(); return; }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        paletteState.activeIndex = Math.min(paletteState.activeIndex + 1, paletteState.visibleRows.length - 1);
+        renderPaletteActive();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        paletteState.activeIndex = Math.max(paletteState.activeIndex - 1, 0);
+        renderPaletteActive();
+      } else if (e.key === 'Enter') {
+        if (paletteState.visibleRows.length === 0) return;
+        e.preventDefault();
+        activateRow(paletteState.activeIndex);
+      }
+    });
+
+    // Click any row to activate.
+    paletteSect.addEventListener('click', (e) => {
+      const row = e.target.closest('.palette__row');
+      if (!row) return;
+      const idx = parseInt(row.getAttribute('data-idx'), 10);
+      if (!Number.isNaN(idx)) activateRow(idx);
+    });
+
+    // Ad-hoc PowerShell input — Shift+Enter to run, Esc to back out.
+    palettePs.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (paletteState.runningJobId && paletteState.pollHandle) {
+          clearInterval(paletteState.pollHandle);
+          paletteState.pollHandle = null;
+        }
+        setPaletteMode('search');
+        paletteInput.value = '';
+        paletteInput.focus();
+      } else if (e.key === 'Enter' && e.shiftKey) {
+        e.preventDefault();
+        const snippet = palettePs.value.trim();
+        if (snippet) submitAdHoc(snippet);
+      }
+    });
+  }
+
   // ---------- Shortcuts panel ----------------------------------
   const panel = document.querySelector('.shortcuts');
   const toggleShortcuts = (force) => {
@@ -1306,10 +1696,12 @@
     }
     if (isTypingTarget(e.target)) return;
     if (e.metaKey || e.ctrlKey || e.altKey) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k' && filterInput) {
+      // ⌘K / Ctrl+K → open the universal command palette from anywhere. The home
+      // page still has `/` to focus the filter; ⌘K is reserved for the palette
+      // so the muscle memory works the same on every page.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        filterInput.focus();
-        filterInput.select();
+        if (typeof openPalette === 'function') openPalette();
       }
       return;
     }

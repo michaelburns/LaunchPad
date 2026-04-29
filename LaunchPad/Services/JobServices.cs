@@ -28,6 +28,14 @@ namespace LaunchPad.Services
         [AutomaticRetry(Attempts = 0)]
         void Run(string name, Dictionary<string, string> psParams);
 
+        // Ad-hoc PowerShell — admin-only, snippet runs without a saved Script.
+        // No UpdateJobStatusFilter: the existing filter assumes Args[0] is a script
+        // name and reads Script.LastOutput, both of which would race across
+        // concurrent ad-hoc runs (every ad-hoc Job points at the same sentinel
+        // _adhoc Script row). RunAdHoc manages its own status transitions instead.
+        [AutomaticRetry(Attempts = 0)]
+        void RunAdHoc(int dbJobId, string snippet);
+
         void RunOnSchedule(int id, string name, string recurring, Dictionary<string, string> psParams, DateTime schedule);
         void SaveResults(string scriptName, IEnumerable<PSObject> results);
         void UpdateJob(string id, Status status, string outcome = null, string scriptName = null);
@@ -99,6 +107,191 @@ namespace LaunchPad.Services
         [UpdateJobStatusFilter]
         [AutomaticRetry(Attempts = 0)]
         public void Run(string name, Dictionary<string, string> psParams) => RunStreaming(name, psParams);
+
+        // Ad-hoc PowerShell entrypoint. The dbJobId is passed explicitly so we can
+        // update the right Job row directly (no name-lookup race across concurrent
+        // ad-hoc runs sharing the sentinel _adhoc Script). The snippet is captured
+        // as the first output segment so it shows above the streaming output —
+        // operators see "the command I ran" then "what it printed" in one view.
+        [AutomaticRetry(Attempts = 0)]
+        public void RunAdHoc(int dbJobId, string snippet) => RunAdHocStreaming(dbJobId, snippet);
+
+        private void RunAdHocStreaming(int dbJobId, string snippet)
+        {
+            // Mark Running immediately so the palette drawer's first poll lights up.
+            var startJob = _scriptRepository.GetJobById(dbJobId);
+            if (startJob == null) return;
+            startJob.Status = Status.Running;
+            _scriptRepository.UpdateJob(startJob);
+            try { _scriptRepository.Save(); } catch { /* ignore transient */ }
+
+            var initial = InitialSessionState.CreateDefault();
+            if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+            {
+                initial.ExecutionPolicy = Microsoft.PowerShell.ExecutionPolicy.Bypass;
+            }
+
+            using var runspace = RunspaceFactory.CreateRunspace(initial);
+            runspace.Open();
+
+            using var ps = PowerShell.Create();
+            ps.Runspace = runspace;
+
+            // Seed the segment list with a {t:"source"} segment so the renderer can
+            // show the operator the snippet they ran above the output. This typed
+            // segment is unique to ad-hoc runs.
+            var segments = new List<OutputSegment>
+            {
+                new OutputSegment { T = "source", V = snippet ?? string.Empty }
+            };
+            var segLock = new object();
+            var lastFlush = DateTime.UtcNow.AddSeconds(-1);
+            var dirty = true; // initial source segment counts as dirty
+
+            void Flush(bool force = false)
+            {
+                string snapshot;
+                lock (segLock)
+                {
+                    if (!dirty && !force) return;
+                    snapshot = System.Text.Json.JsonSerializer.Serialize(segments);
+                    dirty = false;
+                }
+                var live = _scriptRepository.GetJobById(dbJobId);
+                if (live == null) return;
+                live.Outcome = snapshot;
+                _scriptRepository.UpdateJob(live);
+                try { _scriptRepository.Save(); } catch { /* transient */ }
+                lastFlush = DateTime.UtcNow;
+            }
+
+            void AppendText(string s)
+            {
+                if (s == null) return;
+                lock (segLock)
+                {
+                    var last = segments.Count > 0 ? segments[^1] : null;
+                    if (last != null && last.T == "text")
+                        last.V = (last.V ?? "") + (last.V?.Length > 0 ? "\n" : "") + s;
+                    else
+                        segments.Add(new OutputSegment { T = "text", V = s });
+                    dirty = true;
+                }
+                if ((DateTime.UtcNow - lastFlush).TotalMilliseconds >= 250) Flush();
+            }
+
+            void AppendObject(PSObject obj)
+            {
+                if (obj == null) return;
+                if (obj.BaseObject == null
+                    || obj.BaseObject is string
+                    || obj.BaseObject is System.ValueType
+                    || obj.Properties == null)
+                {
+                    AppendText(obj.ToString());
+                    return;
+                }
+                List<PSPropertyInfo> props;
+                var typeName = obj.TypeNames?.FirstOrDefault();
+                if (typeName != null && DefaultColumnsByType.TryGetValue(typeName, out var preferred))
+                {
+                    props = preferred.Select(n => obj.Properties[n]).Where(p => p != null).ToList();
+                    if (props.Count == 0) props = obj.Properties.Take(32).ToList();
+                }
+                else
+                {
+                    props = obj.Properties.Take(32).ToList();
+                }
+                if (props.Count == 0) { AppendText(obj.ToString()); return; }
+
+                var cols = props.Select(p => p.Name).ToList();
+                var row  = props.Select(p => CoerceAdHocValue(p.Value)).ToList();
+                lock (segLock)
+                {
+                    var last = segments.Count > 0 ? segments[^1] : null;
+                    if (last != null && last.T == "table"
+                        && last.Cols != null && last.Cols.SequenceEqual(cols))
+                        last.Rows!.Add(row);
+                    else
+                        segments.Add(new OutputSegment { T = "table", Cols = cols, Rows = new List<List<object?>> { row } });
+                    dirty = true;
+                }
+                if ((DateTime.UtcNow - lastFlush).TotalMilliseconds >= 250) Flush();
+            }
+
+            static object? CoerceAdHocValue(object? v)
+            {
+                if (v is PSObject psObj) v = psObj.BaseObject;
+                return v switch
+                {
+                    null => null,
+                    bool b => b,
+                    int i => i,
+                    long l => l,
+                    short sh => (int)sh,
+                    byte by => (int)by,
+                    double d => d,
+                    float f => (double)f,
+                    decimal dec => (double)dec,
+                    string s => s,
+                    System.DateTime dt => dt.ToString("o"),
+                    System.Enum e => e.ToString(),
+                    _ => v.ToString()
+                };
+            }
+
+            ps.Streams.Information.DataAdded += (_, e) =>
+                AppendText(ps.Streams.Information[e.Index]?.MessageData?.ToString() ?? "");
+            ps.Streams.Verbose.DataAdded += (_, e) =>
+                AppendText("VERBOSE: " + ps.Streams.Verbose[e.Index]?.Message);
+            ps.Streams.Warning.DataAdded += (_, e) =>
+                AppendText("WARNING: " + ps.Streams.Warning[e.Index]?.Message);
+            ps.Streams.Error.DataAdded += (_, e) =>
+                AppendText("ERROR: " + (ps.Streams.Error[e.Index]?.Exception?.Message ?? ps.Streams.Error[e.Index]?.ToString()));
+
+            ps.AddScript(snippet);
+
+            var output = new PSDataCollection<PSObject>();
+            output.DataAdded += (_, e) => AppendObject(output[e.Index]);
+
+            Status finalStatus = Status.Completed;
+            try
+            {
+                var asyncResult = ps.BeginInvoke<PSObject, PSObject>(null, output);
+                while (!asyncResult.AsyncWaitHandle.WaitOne(500))
+                {
+                    if (_scriptRepository.GetJobStatusFresh(dbJobId) == Status.Cancelled)
+                    {
+                        ps.Stop();
+                        finalStatus = Status.Cancelled;
+                        break;
+                    }
+                    if (dirty) Flush();
+                }
+                if (finalStatus != Status.Cancelled) ps.EndInvoke(asyncResult);
+            }
+            catch (PipelineStoppedException)
+            {
+                if (finalStatus != Status.Cancelled) finalStatus = Status.Cancelled;
+            }
+            catch (System.Exception ex)
+            {
+                AppendText("ERROR: " + ex.Message);
+                finalStatus = Status.Failed;
+            }
+
+            Flush(force: true);
+
+            var endJob = _scriptRepository.GetJobById(dbJobId);
+            if (endJob != null && endJob.Status != Status.Cancelled)
+            {
+                endJob.Status = finalStatus;
+                _scriptRepository.UpdateJob(endJob);
+                try { _scriptRepository.Save(); } catch { /* transient */ }
+            }
+
+            runspace.Close();
+        }
 
         // Streaming PowerShell run. Drops Out-String so we capture raw PSObjects, then
         // emits a typed segment stream (text + table) into Job.Outcome as JSON. The

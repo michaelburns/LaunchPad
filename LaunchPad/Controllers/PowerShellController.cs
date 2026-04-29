@@ -275,6 +275,67 @@ namespace LaunchPad.Controllers
             return RedirectToAction("Details", new { id = script.Id });
         }
 
+        // POST: /PowerShell/AdHoc — admin-only one-off PowerShell from the command palette.
+        // Creates a Job row pointing at the sentinel _adhoc Script (lazily created on
+        // first call), enqueues a Hangfire job that calls JobServices.RunAdHoc, and
+        // returns the dbJobId so the palette can poll JobPulse for streaming output.
+        [HttpPost, ValidateAntiForgeryToken]
+        [Authorize(Policy = "Administrator")]
+        public IActionResult AdHoc([FromForm] string snippet)
+        {
+            if (string.IsNullOrWhiteSpace(snippet))
+                return BadRequest(new { error = "snippet is empty" });
+
+            var sentinel = _scriptRepository.GetScripts().FirstOrDefault(s => s.Name == "_adhoc");
+            if (sentinel == null)
+            {
+                var anyCategory = _scriptRepository.GetCategories().FirstOrDefault();
+                if (anyCategory == null)
+                    return BadRequest(new { error = "no categories defined; create one first" });
+                sentinel = new Script { Name = "_adhoc", Author = "system", Category = anyCategory };
+                _scriptRepository.InsertScript(sentinel);
+                _scriptRepository.Save();
+            }
+
+            var job = new Job
+            {
+                UserName = User.Identity?.Name ?? "unknown",
+                ScriptId = sentinel.Id,
+                Date     = DateTime.Now,
+                Status   = Status.Started,
+                JobType  = JobType.Launched
+            };
+            _scriptRepository.InsertJob(job);
+            _scriptRepository.Save();
+
+            var hangfireId = BackgroundJob.Enqueue<IJobServices>(x => x.RunAdHoc(job.Id, snippet));
+            job.JobId = int.Parse(hangfireId);
+            _scriptRepository.UpdateJob(job);
+            _scriptRepository.Save();
+
+            return Json(new { jobId = job.Id });
+        }
+
+        // GET: /PowerShell/JobPulse/{id} — single-job poll used by the palette drawer.
+        // Different from /PowerShell/Pulse/{scriptId} which returns a script's most-
+        // recent state; ad-hoc runs share a sentinel script so we need per-job polling.
+        public IActionResult JobPulse(int id)
+        {
+            var job = _scriptRepository.GetJobs()
+                .Include(j => j.Script)
+                .FirstOrDefault(j => j.Id == id);
+            if (job == null) return NotFound();
+
+            return Json(new
+            {
+                id       = job.Id,
+                status   = job.Status.ToString(),
+                started  = job.Date,
+                userName = job.UserName,
+                outcome  = job.Outcome ?? string.Empty
+            });
+        }
+
         // POST: /PowerShell/PreviewParams — debounced live parse for the author editor.
         // Returns the param block as the launch UI would surface it, plus any AST parse
         // errors. Used by ps-editor.src.js on Edit and Create.

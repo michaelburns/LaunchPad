@@ -921,6 +921,295 @@ td.mono, th.mono, td .mono { font-family: var(--mono); font-variation-settings: 
   background: color-mix(in oklab, var(--accent) 12%, var(--bg-2));
 }
 
+/* ---------- Topbar command-palette button ----------------- */
+
+.topbar__cmd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 0.55em;
+  border-radius: 4px;
+  border: 1px solid var(--rule);
+  background: var(--bg-1);
+  color: var(--fg-2);
+  font-family: var(--mono);
+  font-variation-settings: var(--rec-mono-tight);
+  font-size: var(--t-meta);
+  cursor: pointer;
+  letter-spacing: 0;
+  transition: color 100ms linear, border-color 100ms linear, background 100ms linear;
+}
+.topbar__cmd:hover, .topbar__cmd:focus-visible {
+  color: var(--fg-0);
+  border-color: var(--rule-strong);
+  background: var(--bg-2);
+  outline: none;
+}
+
+/* ---------- Command palette ------------------------------- */
+
+.palette {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in oklab, var(--bg-0) 75%, transparent);
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh var(--s-md) var(--s-md);
+}
+.palette[hidden] { display: none; }
+
+.palette__panel {
+  width: min(640px, 100%);
+  max-height: 76vh;
+  background: var(--bg-1);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  box-shadow: 0 24px 60px oklch(5% 0.012 260 / 0.55);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Ad-hoc mode visual: thin accent left edge runs the height of the panel — the
+   one place we use a left-edge marker, because it signals an active execution
+   surface (the brief's "active moment exception"), not a generic decoration. */
+.palette.is-adhoc .palette__panel {
+  border-color: var(--accent);
+  box-shadow: 0 24px 60px oklch(5% 0.012 260 / 0.55), inset 2px 0 0 var(--accent);
+}
+
+.palette__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-sm);
+  padding: var(--s-sm) var(--s-md);
+  border-bottom: 1px solid var(--rule);
+}
+.palette__caret {
+  font-family: var(--mono);
+  font-variation-settings: var(--rec-mono-tight);
+  font-size: var(--t-lead);
+  color: var(--fg-3);
+  flex: 0 0 auto;
+  letter-spacing: 0;
+}
+.palette.is-adhoc .palette__caret {
+  color: var(--accent);
+  font-weight: 600;
+}
+.palette__input {
+  flex: 1 1 auto;
+  background: transparent;
+  border: none;
+  color: var(--fg-0);
+  font-family: var(--sans);
+  font-size: var(--t-lead);
+  letter-spacing: -0.014em;
+  padding: 0.2em 0;
+}
+.palette__input:focus { outline: none; }
+.palette__input::placeholder { color: var(--fg-3); font-size: var(--t-ui); }
+.palette__close {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-variation-settings: var(--rec-mono-tight);
+  font-size: var(--t-meta);
+  color: var(--fg-3);
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  padding: 0.15em 0.55em;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.palette__close:hover { color: var(--fg-0); border-color: var(--rule-strong); }
+
+/* Ad-hoc PowerShell input — replaces the search input visually when active. */
+.palette__powershell {
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  max-height: 240px;
+  padding: var(--s-md);
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  background: oklch(8% 0.012 260);
+  color: var(--fg-0);
+  font-family: var(--mono);
+  font-variation-settings: var(--rec-mono);
+  font-size: var(--t-ui);
+  line-height: 1.6;
+  letter-spacing: 0;
+  resize: vertical;
+}
+.palette__powershell:focus { outline: none; }
+.palette__powershell[hidden] { display: none; }
+
+/* Body — contains sections, loading, or live output. */
+.palette__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.palette__loading {
+  padding: var(--s-md);
+  font-family: var(--mono);
+  font-variation-settings: var(--rec-mono);
+  font-size: var(--t-meta);
+  color: var(--fg-3);
+}
+.palette__loading[hidden] { display: none; }
+
+.palette__sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-md);
+  padding: var(--s-md) 0;
+}
+.palette__sections[hidden] { display: none; }
+
+.palette__section { display: flex; flex-direction: column; }
+.palette__section-label {
+  font-family: var(--mono);
+  font-variation-settings: var(--rec-mono-tight);
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--fg-3);
+  padding: 0 var(--s-md) 0.4em;
+}
+
+.palette__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-sm);
+  padding: 0.5em var(--s-md);
+  cursor: pointer;
+  user-select: none;
+  border-left: 2px solid transparent;
+  transition: background 80ms linear, color 80ms linear;
+}
+.palette__row:hover { background: var(--bg-2); }
+.palette__row.is-active {
+  background: var(--bg-2);
+  border-left-color: var(--accent);
+}
+.palette__row .glyph {
+  flex: 0 0 1.4em;
+  text-align: center;
+  font-family: var(--mono);
+  font-variation-settings: var(--rec-mono-tight);
+  font-size: 0.9em;
+  color: var(--fg-3);
+}
+.palette__row.is-active .glyph { color: var(--accent); }
+.palette__row .label {
+  flex: 1 1 auto;
+  color: var(--fg-0);
+  font-family: var(--sans);
+  font-size: var(--t-ui);
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.palette__row .meta {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-variation-settings: var(--rec-mono-tight);
+  font-size: var(--t-meta);
+  color: var(--fg-3);
+  letter-spacing: 0;
+}
+.palette__row .kbd-hint {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-variation-settings: var(--rec-mono-tight);
+  font-size: var(--t-meta);
+  color: var(--fg-3);
+  opacity: 0;
+  transition: opacity 80ms linear;
+}
+.palette__row.is-active .kbd-hint { opacity: 1; color: var(--accent); }
+
+.palette__empty {
+  padding: var(--s-md);
+  font-family: var(--mono);
+  font-variation-settings: var(--rec-mono);
+  font-size: var(--t-meta);
+  color: var(--fg-3);
+}
+
+/* Live output — replaces sections when an ad-hoc run is in flight. Reuses the
+   .seg-text and .seg-table classes from Details.cshtml for the segment renderer. */
+.palette__output {
+  flex: 1 1 auto;
+  padding: var(--s-md) var(--s-lg);
+  overflow-y: auto;
+  background: oklch(8% 0.012 260);
+  font-family: var(--mono);
+  font-variation-settings: var(--rec-mono);
+  font-size: var(--t-ui);
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-md);
+}
+.palette__output[hidden] { display: none; }
+.palette__output .seg-source {
+  padding: 0.4em 0.8em;
+  background: oklch(11% 0.014 260);
+  border: 1px solid color-mix(in oklab, var(--accent) 35%, var(--rule));
+  border-left: 2px solid var(--accent);
+  border-radius: 3px;
+  white-space: pre-wrap;
+  color: var(--fg-1);
+  font-size: var(--t-meta);
+}
+.palette__output .seg-source::before {
+  content: "› ";
+  color: var(--accent);
+  font-weight: 600;
+  margin-right: 0.2em;
+}
+.palette__output .seg-text {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--fg-0);
+}
+
+/* Foot strip with kbd hints. Mode-dependent text is rendered by JS. */
+.palette__foot {
+  padding: var(--s-xs) var(--s-md);
+  border-top: 1px solid var(--rule);
+  background: var(--bg-1);
+}
+.palette__hint {
+  font-family: var(--mono);
+  font-variation-settings: var(--rec-mono-tight);
+  font-size: var(--t-micro);
+  color: var(--fg-3);
+  letter-spacing: 0;
+}
+.palette__hint kbd {
+  display: inline-block;
+  min-width: 1.2em;
+  padding: 0.05em 0.35em;
+  margin: 0 0.1em;
+  font-family: var(--mono);
+  font-variation-settings: var(--rec-mono-tight);
+  font-size: 0.9em;
+  text-align: center;
+  color: var(--fg-1);
+  background: var(--bg-2);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+}
+.palette__hint .accent { color: var(--accent); }
+
 /* ---------- Shortcuts panel -------------------------------- */
 
 .shortcuts {
