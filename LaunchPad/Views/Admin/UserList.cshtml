@@ -1,38 +1,198 @@
-﻿@model IEnumerable<LaunchPad.Models.User>
-
+@model IEnumerable<LaunchPad.Models.User>
 @{
     ViewData["Title"] = "Users";
 }
 
-<h2>Users</h2>
+<style>
+    .admin-list { display: grid; grid-template-columns: 1fr; gap: var(--s-md); }
 
-<p>
-    <a asp-action="UserCreate">New User</a>
-</p>
-<table class="table table-striped table-hover">
-    <thead>
-        <tr>
-            <th>
-                @Html.DisplayNameFor(model => model.Username)
-            </th>
-            <th>
-                Roles
-            </th>
+    .admin-list__head {
+        display: flex; align-items: flex-end; justify-content: space-between;
+        gap: var(--s-md); padding-bottom: var(--s-md); border-bottom: 1px solid var(--rule);
+        flex-wrap: wrap;
+    }
+    .admin-list__title { display: flex; align-items: baseline; gap: var(--s-md); flex-wrap: wrap; }
+    .admin-list__title h1 { font-size: var(--t-h2); letter-spacing: -0.022em; }
+    .admin-list__title .meta {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-3);
+    }
 
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var item in Model)
-        {
-            <tr>
-                <td>
-                    <a asp-action="UserEdit" asp-route-id="@item.Id">@Html.DisplayFor(modelItem => item.Username)</a>
-                </td>
-                <td>
-                    <span>@String.Join(", ", item.UserRoles.Select(r => r.Role.Name))</span>
-                </td>
-            </tr>
-        }
-    </tbody>
-</table>
+    .add-btn {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-2);
+        border: 1px solid var(--rule);
+        background: var(--bg-1);
+        padding: 0.3em 0.7em;
+        border-radius: 4px;
+        text-decoration: none;
+    }
+    .add-btn:hover { color: var(--fg-0); border-color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, var(--bg-1)); }
 
+    .notice, .notice-error {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        padding: var(--s-sm) var(--s-md);
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+        background: var(--bg-1);
+        color: var(--fg-1);
+    }
+    .notice-error {
+        border-color: color-mix(in oklab, var(--fail) 45%, var(--rule-strong));
+        background: color-mix(in oklab, var(--fail) 8%, var(--bg-1));
+        color: var(--fail);
+    }
+
+    .roster { width: 100%; font-size: var(--t-body); }
+    .roster th {
+        text-align: left;
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        text-transform: lowercase;
+        letter-spacing: 0;
+        color: var(--fg-3);
+        font-weight: 500;
+        padding: var(--s-sm) var(--s-md) var(--s-sm) 0;
+        border-bottom: 1px solid var(--rule-strong);
+        white-space: nowrap;
+    }
+    .roster td {
+        padding: 0.85em var(--s-md) 0.85em 0;
+        border-bottom: 1px solid var(--rule);
+        vertical-align: middle;
+        color: var(--fg-1);
+    }
+    .roster tbody tr:hover td { background: var(--bg-1); }
+    .roster tbody tr:last-child td { border-bottom-color: transparent; }
+
+    .col-name a {
+        font-family: var(--sans);
+        font-weight: 600;
+        font-size: var(--t-body);
+        color: var(--fg-0);
+        border-bottom: none;
+        letter-spacing: -0.012em;
+    }
+    .col-name a:hover { color: var(--accent); }
+    .col-roles, .col-cats {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-ui);
+        color: var(--fg-2);
+    }
+    .pill {
+        display: inline-block;
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        padding: 0.05em 0.45em;
+        margin: 0 0.2em 0.2em 0;
+        border-radius: 3px;
+        background: var(--bg-2);
+        color: var(--fg-1);
+        border: 1px solid var(--rule);
+    }
+    .pill.pill--admin { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 35%, var(--rule-strong)); }
+    .pill.pill--empty { color: var(--fg-3); background: transparent; border-style: dashed; }
+
+    .col-action { text-align: right; white-space: nowrap; }
+    .col-action a { opacity: 0.55; transition: opacity 100ms linear, color 100ms linear, border-color 100ms linear; }
+    .roster tr:hover .col-action a { opacity: 1; }
+
+    .empty {
+        padding: var(--s-2xl) var(--s-md);
+        text-align: left;
+        color: var(--fg-2);
+        border: 1px dashed var(--rule-strong);
+        border-radius: 4px;
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono);
+    }
+    .empty p { margin-bottom: var(--s-md); }
+</style>
+
+<section class="admin-list">
+    <header class="admin-list__head">
+        <div class="admin-list__title">
+            <h1>users</h1>
+            <span class="meta">@Model.Count() @(Model.Count() == 1 ? "user" : "users")</span>
+        </div>
+        <a class="add-btn" asp-action="UserCreate">+ new user</a>
+    </header>
+
+    @if (TempData["AdminNotice"] is string okMsg)
+    {
+        <div class="notice">@okMsg</div>
+    }
+    @if (TempData["AdminError"] is string errMsg)
+    {
+        <div class="notice-error">@errMsg</div>
+    }
+
+    @if (Model.Any())
+    {
+        <table class="roster">
+            <thead>
+                <tr>
+                    <th>username</th>
+                    <th>roles</th>
+                    <th>categories</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in Model)
+                {
+                    var roles = user.UserRoles?.Select(ur => ur.Role?.Name).Where(n => !string.IsNullOrEmpty(n)).ToList() ?? new System.Collections.Generic.List<string>();
+                    var catCount = user.Categories?.Count() ?? 0;
+                    <tr>
+                        <td class="col-name">
+                            <a asp-action="UserEdit" asp-route-id="@user.Id">@user.Username</a>
+                        </td>
+                        <td class="col-roles">
+                            @if (roles.Any())
+                            {
+                                foreach (var role in roles)
+                                {
+                                    var cls = role == "Administrator" ? "pill pill--admin" : "pill";
+                                    <span class="@cls">@role?.ToLowerInvariant()</span>
+                                }
+                            }
+                            else
+                            {
+                                <span class="pill pill--empty">no roles</span>
+                            }
+                        </td>
+                        <td class="col-cats">
+                            @if (catCount > 0)
+                            {
+                                <span class="pill"><span data-numeric>@catCount</span> @(catCount == 1 ? "category" : "categories")</span>
+                            }
+                            else
+                            {
+                                <span class="pill pill--empty">none</span>
+                            }
+                        </td>
+                        <td class="col-action">
+                            <a class="ghost" asp-action="UserEdit" asp-route-id="@user.Id">edit ›</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <div class="empty">
+            <p>$ ls users/ &mdash; <span style="color: var(--fg-3)">empty</span></p>
+            <p>No users yet. <a asp-action="UserCreate">Add one</a> to grant access to LaunchPad.</p>
+        </div>
+    }
+</section>

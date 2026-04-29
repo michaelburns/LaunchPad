@@ -1,38 +1,162 @@
-﻿
 @{
-    ViewData["Title"] = "Admin";
+    ViewData["Title"] = "Access";
+    int users      = ViewBag.UserCount       ?? 0;
+    int admins     = ViewBag.AdminCount      ?? 0;
+    int categories = ViewBag.CategoryCount   ?? 0;
+    int scripts    = ViewBag.ScriptCount     ?? 0;
+    int orphanUsers = ViewBag.UsersWithoutRoles ?? 0;
+    int emptyCats   = ViewBag.EmptyCategories   ?? 0;
+    bool hasAnomalies = orphanUsers > 0 || emptyCats > 0;
 }
 
-<br />
-<div class="row">
-    <div class="col-xs-12 col-md-5 col-md-push-1">
-        <div class="well">
-            <div class="pad-all text-center">
-                <span class="text-2x text-thinr">
-                    <span class="glyphicon glyphicon-user"></span>
-                    Users
-                </span>
-                <p></p>
-                <a class="btn btn-info btn-sm text-uppercase" asp-action="UserList"> Admin</a>
-            </div>
+<style>
+    .admin-home { display: grid; grid-template-columns: 1fr; gap: var(--s-xl); max-width: 960px; }
+
+    .admin-home__head {
+        display: flex; align-items: flex-end; justify-content: space-between;
+        gap: var(--s-md); padding-bottom: var(--s-md); border-bottom: 1px solid var(--rule);
+    }
+    .admin-home__title { display: flex; align-items: baseline; gap: var(--s-md); flex-wrap: wrap; }
+    .admin-home__title h1 { font-size: var(--t-h2); letter-spacing: -0.022em; }
+    .admin-home__title .meta {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-3);
+        letter-spacing: 0;
+    }
+    .admin-home__title .meta a {
+        color: var(--fg-2);
+        border-bottom: 1px dotted var(--rule-strong);
+    }
+    .admin-home__title .meta a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+    .admin-cards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-lg); }
+    @@media (max-width: 720px) { .admin-cards { grid-template-columns: 1fr; } }
+
+    .admin-card {
+        background: var(--bg-1);
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+        padding: var(--s-lg);
+        display: flex;
+        flex-direction: column;
+        gap: var(--s-sm);
+        text-decoration: none;
+        color: inherit;
+        transition: border-color 100ms linear, background 100ms linear;
+    }
+    .admin-card:hover {
+        border-color: var(--rule-strong);
+        background: color-mix(in oklab, var(--accent) 4%, var(--bg-1));
+    }
+    .admin-card:hover .admin-card__name { color: var(--accent); }
+
+    .admin-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-sm); }
+    .admin-card__name {
+        font-size: var(--t-lead);
+        font-weight: 600;
+        color: var(--fg-0);
+        letter-spacing: -0.018em;
+    }
+    .admin-card__count {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-h3);
+        color: var(--fg-0);
+        letter-spacing: 0;
+        font-variant-numeric: tabular-nums;
+    }
+    .admin-card__sub {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-3);
+        letter-spacing: 0;
+    }
+
+    /* Anomaly strip — shown only when something has drifted. Silence is feedback. */
+    .anomalies {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: var(--s-md);
+        padding: var(--s-sm) var(--s-md);
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-2);
+        background: var(--bg-1);
+        border: 1px solid var(--rule);
+        border-left: 1px solid var(--warn);
+        border-radius: 4px;
+        letter-spacing: 0;
+    }
+    .anomalies__label {
+        font-size: var(--t-micro);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--warn);
+        flex: 0 0 auto;
+    }
+    .anomalies__item { color: var(--fg-1); }
+    .anomalies__item a { color: inherit; border-bottom: 1px dotted var(--rule-strong); }
+    .anomalies__item a:hover { color: var(--warn); border-bottom-color: var(--warn); }
+    .anomalies__sep { color: var(--fg-3); padding: 0 0.1em; }
+</style>
+
+<section class="admin-home">
+    <header class="admin-home__head">
+        <div class="admin-home__title">
+            <h1>access</h1>
+            <span class="meta">
+                manage who can run what · <a data-shortcuts-open="concepts">how access works ›</a>
+            </span>
         </div>
-    </div>
-    <div class="col-xs-12 col-md-5 col-md-push-1">
-        <div class="well">
-            <div class="pad-all text-center">
-                <span class="text-2x text-thin">
-                    <span class="glyphicon glyphicon-list-alt"></span>
-                    Categories
+    </header>
+
+    @if (hasAnomalies)
+    {
+        <div class="anomalies">
+            <span class="anomalies__label">drift</span>
+            @if (orphanUsers > 0)
+            {
+                <span class="anomalies__item">
+                    <a asp-action="UserList"><span data-numeric>@orphanUsers</span> @(orphanUsers == 1 ? "user has" : "users have") no roles</a>
                 </span>
-                <p></p>
-                <a class="btn btn-info btn-sm text-uppercase" asp-action="CategoryList"> Admin</a>
-            </div>
+            }
+            @if (orphanUsers > 0 && emptyCats > 0)
+            {
+                <span class="anomalies__sep">·</span>
+            }
+            @if (emptyCats > 0)
+            {
+                <span class="anomalies__item">
+                    <a asp-action="CategoryList"><span data-numeric>@emptyCats</span> @(emptyCats == 1 ? "category has" : "categories have") no scripts</a>
+                </span>
+            }
         </div>
+    }
+
+    <div class="admin-cards">
+        <a class="admin-card" asp-action="UserList">
+            <div class="admin-card__head">
+                <span class="admin-card__name">users</span>
+                <span class="admin-card__count" data-numeric>@users</span>
+            </div>
+            <div class="admin-card__sub">
+                <span data-numeric>@admins</span> @(admins == 1 ? "administrator" : "administrators")
+            </div>
+        </a>
+
+        <a class="admin-card" asp-action="CategoryList">
+            <div class="admin-card__head">
+                <span class="admin-card__name">categories</span>
+                <span class="admin-card__count" data-numeric>@categories</span>
+            </div>
+            <div class="admin-card__sub">
+                <span data-numeric>@scripts</span> @(scripts == 1 ? "script" : "scripts") across all categories
+            </div>
+        </a>
     </div>
-</div>
-
-
-
-
-
-
+</section>

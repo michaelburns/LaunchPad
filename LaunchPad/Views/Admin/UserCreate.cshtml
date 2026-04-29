@@ -1,57 +1,179 @@
-﻿@model AdminViewModel
-
+@model AdminViewModel
 @{
-    ViewData["Title"] = "Create";
+    ViewData["Title"] = "New user";
+    var availableRoles = (Model.AvailableRoles ?? new Microsoft.AspNetCore.Mvc.Rendering.SelectList(new System.Collections.Generic.List<object>(), "Id", "Name")).ToList();
+    var availableCats  = (Model.AvailableCategories ?? new Microsoft.AspNetCore.Mvc.Rendering.SelectList(new System.Collections.Generic.List<object>(), "Id", "Name")).ToList();
+    var selectedRoles = Model.SelectedRoles?.ToList() ?? new System.Collections.Generic.List<int>();
+    var selectedCats  = Model.SelectedCategories?.ToList() ?? new System.Collections.Generic.List<int>();
 }
 
-<h2>New User</h2>
+<style>
+    .author { display: grid; grid-template-columns: 1fr; gap: var(--s-xl); max-width: 760px; }
+    .author__head {
+        display: flex; align-items: flex-end; justify-content: space-between;
+        gap: var(--s-md); padding-bottom: var(--s-md); border-bottom: 1px solid var(--rule);
+    }
+    .author__title { display: flex; align-items: baseline; gap: var(--s-md); flex-wrap: wrap; }
+    .author__title h1 { font-size: var(--t-h2); letter-spacing: -0.022em; }
+    .author__title .meta {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-3);
+    }
 
-<hr />
-<div class="row">
-    <div class="col-md-4">
-        <form asp-action="UserCreate">
-            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-            <div class="form-group">
-                <label asp-for="User.Username" class="control-label"></label>
-                <input asp-for="User.Username" class="form-control" />
-                <span asp-validation-for="User.Username" class="text-danger"></span>
+    .author__form { display: grid; gap: var(--s-lg); }
+    .author__row { display: grid; grid-template-columns: 180px 1fr; gap: var(--s-md); align-items: start; }
+    .author__row > label, .author__row > .label {
+        font-size: var(--t-meta);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--fg-2);
+        margin: 0.4em 0 0;
+    }
+    .author__row .field-help {
+        display: block;
+        margin-top: var(--s-2xs);
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-3);
+    }
+    .author__row input[type="text"] { max-width: 36ch; }
+
+    .checklist {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 0.4em;
+        background: var(--bg-1);
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+        padding: var(--s-sm);
+    }
+    .checklist label {
+        display: flex; align-items: center; gap: 0.5em;
+        font-family: var(--sans);
+        font-size: var(--t-ui);
+        color: var(--fg-1);
+        text-transform: none;
+        letter-spacing: 0;
+        font-weight: normal;
+        padding: 0.4em 0.5em;
+        border-radius: 3px;
+        cursor: pointer;
+        margin: 0;
+    }
+    .checklist label:hover { background: var(--bg-2); color: var(--fg-0); }
+    .checklist input[type="checkbox"] { accent-color: var(--accent); margin: 0; }
+    .checklist__empty {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono);
+        font-size: var(--t-meta);
+        color: var(--fg-3);
+        padding: 0.5em;
+    }
+
+    .author__actions {
+        display: flex; gap: var(--s-md); align-items: center;
+        padding-top: var(--s-md); border-top: 1px solid var(--rule);
+    }
+
+    .validation-summary-errors,
+    .field-validation-error,
+    .text-danger {
+        color: var(--fail);
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono);
+        font-size: var(--t-meta);
+    }
+    .validation-summary-errors {
+        padding: var(--s-sm) var(--s-md);
+        background: color-mix(in oklab, var(--fail) 8%, var(--bg-1));
+        border: 1px solid color-mix(in oklab, var(--fail) 45%, var(--rule-strong));
+        border-radius: 4px;
+        margin-bottom: var(--s-md);
+    }
+
+    @@media (max-width: 720px) {
+        .author__row { grid-template-columns: 1fr; }
+    }
+</style>
+
+<section class="author">
+    <header class="author__head">
+        <div class="author__title">
+            <h1>new user</h1>
+            <span class="meta">grant access to LaunchPad</span>
+        </div>
+        <a class="ghost" asp-action="UserList">cancel</a>
+    </header>
+
+    <form asp-action="UserCreate" method="post" class="author__form" data-author-form>
+        @Html.AntiForgeryToken()
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+        <div class="author__row">
+            <label asp-for="User.Username">username</label>
+            <div>
+                <input asp-for="User.Username" autocomplete="off" spellcheck="false" required autofocus />
+                <span asp-validation-for="User.Username" class="field-validation-error"></span>
+                <span class="field-help">domain login or local account name — must match what the host's auth resolves to.</span>
             </div>
-            <div class="form-group">
-                <label asp-for="User.UserRoles" class="control-label">Roles</label>
-                <select asp-for="SelectedRoles" asp-items="@Model.AvailableRoles" class="multiselect" required></select>
-                <span asp-validation-for="SelectedRoles" class="text-danger"></span>
+        </div>
+
+        <div class="author__row">
+            <span class="label">roles</span>
+            <div>
+                @if (availableRoles.Any())
+                {
+                    <div class="checklist">
+                        @foreach (var role in availableRoles)
+                        {
+                            var rid = int.Parse(role.Value);
+                            <label>
+                                <input type="checkbox" name="SelectedRoles" value="@rid" @(selectedRoles.Contains(rid) ? "checked" : "") />
+                                <span>@role.Text</span>
+                            </label>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="checklist"><span class="checklist__empty">$ no roles defined</span></div>
+                }
+                <span asp-validation-for="SelectedRoles" class="field-validation-error"></span>
+                <span class="field-help">at least one role is required. <code>Author</code> can edit scripts; <code>Launcher</code> can run them; <code>Administrator</code> can manage access.</span>
             </div>
-            <div class="form-group">
-                <label class="control-label" asp-for="User.Categories"></label>
-                    <select class="form-control multiselect" asp-for="SelectedCategories" asp-items="@Model.AvailableCategories" required>
-                    </select>
-                    <span asp-validation-for="SelectedCategories" class="text-danger"></span>
+        </div>
+
+        <div class="author__row">
+            <span class="label">categories</span>
+            <div>
+                @if (availableCats.Any())
+                {
+                    <div class="checklist">
+                        @foreach (var cat in availableCats)
+                        {
+                            var cid = int.Parse(cat.Value);
+                            <label>
+                                <input type="checkbox" name="SelectedCategories" value="@cid" @(selectedCats.Contains(cid) ? "checked" : "") />
+                                <span>@cat.Text</span>
+                            </label>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="checklist"><span class="checklist__empty">$ no categories yet — <a asp-action="CategoryCreate">create one</a> first</span></div>
+                }
+                <span asp-validation-for="SelectedCategories" class="field-validation-error"></span>
+                <span class="field-help">scripts inside these categories will be visible and runnable.</span>
             </div>
-            <div class="form-group">
-                <input type="submit" value="Create" class="btn btn-default" />
-            </div>
-        </form>
-    </div>
-</div>
+        </div>
 
-<div>
-    <a asp-action="UserList">Back to List</a>
-</div>
-
-@section Scripts {
-    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
-
-    <script src="~/lib/bootstrap-multiselect/dist/js/bootstrap-multiselect.js"></script>
-
-    <script type="text/javascript">
-        $(document).ready(function () {
-            $('.multiselect').multiselect({
-                buttonWidth: '100%',
-                enableFiltering: true,
-                enableCaseInsensitiveFiltering: true,
-                includeSelectAllOption: true,
-                buttonClass: 'btn btn-primary'
-            });
-        });
-    </script>
-}
+        <div class="author__actions">
+            <button type="submit" class="btn btn-primary">create user</button>
+            <a class="ghost" asp-action="UserList">cancel</a>
+        </div>
+    </form>
+</section>

@@ -1,32 +1,85 @@
-﻿@model CategoryViewModel
-
+@model CategoryViewModel
 @{
-    ViewData["Title"] = "Edit";
+    ViewData["Title"] = $"Edit · {Model.Category.Name}";
 }
 
-<h2>Edit Category</h2>
+<style>
+    .author { display: grid; grid-template-columns: 1fr; gap: var(--s-xl); max-width: 540px; }
+    .author__head {
+        display: flex; align-items: flex-end; justify-content: space-between;
+        gap: var(--s-md); padding-bottom: var(--s-md); border-bottom: 1px solid var(--rule);
+    }
+    .author__title { display: flex; align-items: baseline; gap: var(--s-md); flex-wrap: wrap; }
+    .author__title h1 { font-size: var(--t-h2); letter-spacing: -0.022em; }
+    .author__title .meta {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-3);
+    }
 
-<hr />
-<div class="row">
-    <div class="col-md-4">
-        <form asp-action="CategoryEdit" asp-method="Post">
-            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-            <input type="hidden" asp-for="Category.Id" />
-            <div class="form-group">
-                <label asp-for="Category.Name" class="control-label"></label>
-                <input asp-for="Category.Name" class="form-control" />
-                <span asp-validation-for="Category.Name" class="text-danger"></span>
+    .author__form { display: grid; gap: var(--s-md); }
+    .author__row { display: grid; grid-template-columns: 180px 1fr; gap: var(--s-md); align-items: baseline; }
+    .author__row label {
+        font-size: var(--t-meta);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--fg-2);
+        margin: 0;
+    }
+    .author__row input[type="text"] { max-width: 32ch; }
+
+    .author__actions {
+        display: flex; gap: var(--s-md); align-items: center;
+        padding-top: var(--s-md); border-top: 1px solid var(--rule);
+    }
+
+    .validation-summary-errors,
+    .field-validation-error,
+    .text-danger {
+        color: var(--fail);
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono);
+        font-size: var(--t-meta);
+    }
+    .validation-summary-errors {
+        padding: var(--s-sm) var(--s-md);
+        background: color-mix(in oklab, var(--fail) 8%, var(--bg-1));
+        border: 1px solid color-mix(in oklab, var(--fail) 45%, var(--rule-strong));
+        border-radius: 4px;
+        margin-bottom: var(--s-md);
+    }
+
+    @@media (max-width: 720px) {
+        .author__row { grid-template-columns: 1fr; }
+    }
+</style>
+
+<section class="author">
+    <header class="author__head">
+        <div class="author__title">
+            <h1>@Model.Category.Name</h1>
+            <span class="meta">edit category</span>
+        </div>
+        <a class="ghost" asp-action="CategoryList">cancel</a>
+    </header>
+
+    <form asp-action="CategoryEdit" method="post" class="author__form" data-author-form>
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Category.Id" />
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+        <div class="author__row">
+            <label asp-for="Category.Name">name</label>
+            <div>
+                <input asp-for="Category.Name" autocomplete="off" spellcheck="false" required />
+                <span asp-validation-for="Category.Name" class="field-validation-error"></span>
             </div>
-            <div class="form-group">
-                <input type="submit" value="Save" class="btn btn-default" />
-            </div>
-        </form>
-    </div>
-</div>
+        </div>
 
-<div>
-    <a asp-action="CategoryList">Back to List</a>
-</div>
-
-
-
+        <div class="author__actions">
+            <button type="submit" class="btn btn-primary">save changes</button>
+            <a class="ghost" asp-action="CategoryList">cancel</a>
+        </div>
+    </form>
+</section>

@@ -1,29 +1,168 @@
-﻿@model IEnumerable<LaunchPad.Models.Category>
-
+@model IEnumerable<LaunchPad.Models.Category>
 @{
     ViewData["Title"] = "Categories";
+    var scriptCounts = ViewBag.ScriptCounts as System.Collections.Generic.Dictionary<int, int>
+                       ?? new System.Collections.Generic.Dictionary<int, int>();
 }
 
-<h2>Script Categories</h2>
+<style>
+    .admin-list { display: grid; grid-template-columns: 1fr; gap: var(--s-md); max-width: 760px; }
 
-<p>
-    <a asp-action="CategoryCreate">New Category</a>
-</p>
-<table class="table">
-    <thead>
-        <tr>
-                <th>
-                    @Html.DisplayNameFor(model => model.Name)
-                </th>
-        </tr>
-    </thead>
-    <tbody>
-@foreach (var item in Model) {
-        <tr>
-            <td>
-                <a asp-action="CategoryEdit" asp-route-id="@item.Id">@Html.DisplayFor(modelItem => item.Name)</a>
-            </td>
-        </tr>
-}
-    </tbody>
-</table>
+    .admin-list__head {
+        display: flex; align-items: flex-end; justify-content: space-between;
+        gap: var(--s-md); padding-bottom: var(--s-md); border-bottom: 1px solid var(--rule);
+        flex-wrap: wrap;
+    }
+    .admin-list__title { display: flex; align-items: baseline; gap: var(--s-md); flex-wrap: wrap; }
+    .admin-list__title h1 { font-size: var(--t-h2); letter-spacing: -0.022em; }
+    .admin-list__title .meta {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-3);
+    }
+
+    .add-btn {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-2);
+        border: 1px solid var(--rule);
+        background: var(--bg-1);
+        padding: 0.3em 0.7em;
+        border-radius: 4px;
+        text-decoration: none;
+    }
+    .add-btn:hover { color: var(--fg-0); border-color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, var(--bg-1)); }
+
+    .notice, .notice-error {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        padding: var(--s-sm) var(--s-md);
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+        background: var(--bg-1);
+        color: var(--fg-1);
+    }
+    .notice-error {
+        border-color: color-mix(in oklab, var(--fail) 45%, var(--rule-strong));
+        background: color-mix(in oklab, var(--fail) 8%, var(--bg-1));
+        color: var(--fail);
+    }
+
+    .roster { width: 100%; font-size: var(--t-body); }
+    .roster th {
+        text-align: left;
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        text-transform: lowercase;
+        letter-spacing: 0;
+        color: var(--fg-3);
+        font-weight: 500;
+        padding: var(--s-sm) var(--s-md) var(--s-sm) 0;
+        border-bottom: 1px solid var(--rule-strong);
+        white-space: nowrap;
+    }
+    .roster td {
+        padding: 0.85em var(--s-md) 0.85em 0;
+        border-bottom: 1px solid var(--rule);
+        vertical-align: middle;
+        color: var(--fg-1);
+    }
+    .roster tbody tr:hover td { background: var(--bg-1); }
+    .roster tbody tr:last-child td { border-bottom-color: transparent; }
+
+    .col-name a {
+        font-family: var(--sans);
+        font-weight: 600;
+        font-size: var(--t-body);
+        color: var(--fg-0);
+        border-bottom: none;
+        letter-spacing: -0.012em;
+    }
+    .col-name a:hover { color: var(--accent); }
+    .col-count {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-ui);
+        color: var(--fg-2);
+    }
+    .col-action { text-align: right; white-space: nowrap; }
+    .col-action form { display: inline; }
+    .col-action a, .col-action button { opacity: 0.55; transition: opacity 100ms linear; }
+    .roster tr:hover .col-action a, .roster tr:hover .col-action button { opacity: 1; }
+    .col-action .ghost + .ghost { margin-left: 0.4em; }
+
+    .empty {
+        padding: var(--s-2xl) var(--s-md);
+        text-align: left;
+        color: var(--fg-2);
+        border: 1px dashed var(--rule-strong);
+        border-radius: 4px;
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono);
+    }
+    .empty p { margin-bottom: var(--s-md); }
+</style>
+
+<section class="admin-list">
+    <header class="admin-list__head">
+        <div class="admin-list__title">
+            <h1>categories</h1>
+            <span class="meta">@Model.Count() @(Model.Count() == 1 ? "category" : "categories")</span>
+        </div>
+        <a class="add-btn" asp-action="CategoryCreate">+ new category</a>
+    </header>
+
+    @if (TempData["AdminNotice"] is string okMsg)
+    {
+        <div class="notice">@okMsg</div>
+    }
+    @if (TempData["AdminError"] is string errMsg)
+    {
+        <div class="notice-error">@errMsg</div>
+    }
+
+    @if (Model.Any())
+    {
+        <table class="roster">
+            <thead>
+                <tr>
+                    <th>name</th>
+                    <th>scripts</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var category in Model)
+                {
+                    var count = scriptCounts.TryGetValue(category.Id, out var c) ? c : 0;
+                    <tr>
+                        <td class="col-name">
+                            <a asp-action="CategoryEdit" asp-route-id="@category.Id">@category.Name</a>
+                        </td>
+                        <td class="col-count">
+                            <span data-numeric>@count</span> @(count == 1 ? "script" : "scripts")
+                        </td>
+                        <td class="col-action">
+                            <a class="ghost" asp-action="CategoryEdit" asp-route-id="@category.Id">edit</a>
+                            <form asp-action="CategoryDelete" asp-route-id="@category.Id" method="post" data-arm-form>
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="ghost is-danger" data-arm-btn data-armed-label="confirm delete">delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <div class="empty">
+            <p>$ ls categories/ &mdash; <span style="color: var(--fg-3)">empty</span></p>
+            <p>No categories yet. <a asp-action="CategoryCreate">Create one</a> — categories are how you grant operators access to specific groups of scripts.</p>
+        </div>
+    }
+</section>
