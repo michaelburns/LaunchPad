@@ -1,78 +1,176 @@
-﻿@using Microsoft.AspNetCore.Authorization
+@using LaunchPad.Data
+@using LaunchPad.Models
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
 @inject IAuthorizationService AuthorizationService
-<!DOCTYPE html>
-<html>
+@inject IScriptRepository ScriptRepository
+@{
+    var path = (Context.Request.Path.Value ?? "/").ToLowerInvariant();
+    string navClass(string token) => path.StartsWith(token, StringComparison.OrdinalIgnoreCase) ? "nav__item is-active" : "nav__item";
+    var scriptsActive = path == "/" || path.StartsWith("/powershell", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/home", StringComparison.OrdinalIgnoreCase);
+    var isAdmin = (await AuthorizationService.AuthorizeAsync(User, "Administrator")).Succeeded;
+    var signed  = string.IsNullOrEmpty(User.Identity?.Name) ? "—" : User.Identity!.Name!;
+    var sectionId = path switch {
+        var p when p == "/" || p.StartsWith("/home") || p.StartsWith("/powershell") => "scripts",
+        var p when p.StartsWith("/scripts/jobs")                                    => "audit",
+        var p when p.StartsWith("/admin")                                           => "access",
+        _                                                                           => "scripts"
+    };
+    var crumb = path == "/" ? "/" : path.TrimEnd('/');
+
+    // Running-job dock — small, cheap query so every page can show "what's running right now."
+    Job runningJob = ScriptRepository.GetJobs()
+        .Include(j => j.Script)
+        .Where(j => j.Status == Status.Running || j.Status == Status.Started)
+        .OrderByDescending(j => j.Id)
+        .FirstOrDefault();
+
+    string ago(DateTime d) {
+        var t = DateTime.Now - d;
+        if (t.TotalSeconds < 60) return $"{(int)t.TotalSeconds}s";
+        if (t.TotalMinutes < 60) return $"{(int)t.TotalMinutes}m";
+        if (t.TotalHours   < 24) return $"{(int)t.TotalHours}h";
+        return $"{(int)t.TotalDays}d";
+    }
+}<!DOCTYPE html>
+<html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - { Launch-Pad }</title>
+    <meta name="color-scheme" content="dark" />
+    <title>@(ViewData["Title"] ?? "LaunchPad") · launch-pad</title>
 
-    <environment names="Development">
-        <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.css" />
-        <link rel="stylesheet" href="~/css/site.css" />
-    </environment>
-    <environment names="Staging,Production">
-        <link rel="stylesheet" href="https://ajax.aspnetcdn.com/ajax/bootstrap/3.3.7/css/bootstrap.min.css"
-              asp-fallback-href="~/lib/bootstrap/dist/css/bootstrap.min.css"
-              asp-fallback-test-class="sr-only" asp-fallback-test-property="position" asp-fallback-test-value="absolute" />
-        <link rel="stylesheet" href="~/css/site.min.css" asp-append-version="true" />
-    </environment>
-    <link href="~/lib/bootswatch/spacelab/bootstrap.min.css" rel="stylesheet" />
-    <link href="~/lib/bootstrap-multiselect/dist/css/bootstrap-multiselect.css" rel="stylesheet" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Recursive:slnt,wght,CASL,CRSV,MONO@@-15..0,300..900,0..1,0..1,0..1&amp;display=swap" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+
+    @await RenderSectionAsync("Head", required: false)
 </head>
-<body>
-    <nav class="navbar navbar-inverse navbar-fixed-top">
-        <div class="container">
-            <div class="navbar-header">
-                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
-                    <span class="sr-only">Toggle navigation</span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                </button>
-                <a asp-area="" asp-controller="Home" asp-action="Index" class="navbar-brand">{ Launch-Pad }</a>
-            </div>
-            <div class="navbar-collapse collapse">
-                <ul class="nav navbar-nav">
-                    <li><a asp-area="" asp-controller="PowerShell" asp-action="Index">PowerShell</a></li>
-                    @if ((await AuthorizationService.AuthorizeAsync(User, "Administrator")).Succeeded)
-                    {
-                        <li><a asp-area="" asp-controller="Admin" asp-action="Index"><i class="glyphicon glyphicon-cog"></i> Admin</a></li>
-                    }
-                </ul>
-                <p class="nav navbar-text navbar-right">@User.Identity.Name</p>
-            </div>
+<body data-running="@(runningJob != null ? "true" : "false")" data-admin="@(isAdmin ? "true" : "false")">
+
+<div class="app">
+
+    <header class="topbar" role="banner">
+        <a class="brand" href="/" aria-label="LaunchPad — home">
+            <span class="brace brace--l">{</span><span class="name">launch-pad</span><span class="brace brace--r">}</span>
+        </a>
+        @if (path != "/")
+        {
+            <span class="topbar__divider" aria-hidden="true"></span>
+            <span class="topbar__crumb" data-section="@sectionId">
+                <span class="here">@crumb</span>
+            </span>
+        }
+
+        <span class="topbar__spacer"></span>
+
+        <button type="button" class="topbar__help" data-shortcuts-toggle aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">
+            <span aria-hidden="true">?</span>
+        </button>
+
+        <a class="topbar__now" data-running-dock
+           href="@(runningJob != null ? "/PowerShell/Details/" + runningJob.ScriptId : "#")"
+           title="@(runningJob != null ? "Running: " + (runningJob.Script?.Name ?? "unknown") : "")"
+           style="@(runningJob != null ? "" : "display:none")">
+            <span class="pulse" aria-hidden="true"></span>
+            <span class="name" data-running-name>@(runningJob?.Script?.Name ?? "")</span>
+            <span class="ago" data-running-iso="@(runningJob != null ? runningJob.Date.ToString("o") : "")">@(runningJob != null ? ago(runningJob.Date) : "")</span>
+        </a>
+
+        <span class="topbar__user" title="Signed in">
+            <span class="dot" aria-hidden="true"></span>
+            <span>@signed</span>
+        </span>
+    </header>
+
+    <aside class="sidebar" role="navigation" aria-label="Primary">
+        <div class="sidebar__group">
+            <span class="sidebar__group-label">Operate</span>
+            <ul class="nav">
+                <li>
+                    <a class="@(scriptsActive ? "nav__item is-active" : "nav__item")" href="/">
+                        <span class="glyph" aria-hidden="true">›_</span>
+                        <span class="label">Scripts</span>
+                    </a>
+                </li>
+                <li>
+                    <a class="@navClass("/scripts/jobs")" href="/Scripts/Jobs">
+                        <span class="glyph" aria-hidden="true">⌗</span>
+                        <span class="label">Audit</span>
+                    </a>
+                </li>
+            </ul>
         </div>
-    </nav>
-    <div class="container body-content">
-        @RenderBody()
-        <hr />
-        <footer class="text-center">
-            <p>&copy; 2018 - { Launch-Pad }</p>
-        </footer>
+
+        @if (isAdmin)
+        {
+            <div class="sidebar__group sidebar__group--admin">
+                <span class="sidebar__group-label">Govern</span>
+                <ul class="nav">
+                    <li>
+                        <a class="@navClass("/admin")" href="/Admin">
+                            <span class="glyph" aria-hidden="true">@@</span>
+                            <span class="label">Access</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        }
+    </aside>
+
+    <main class="main" id="main">
+        <div class="main__inner">
+            @RenderBody()
+        </div>
+    </main>
+
+</div>
+
+<div class="shortcuts" hidden aria-hidden="true" role="dialog" aria-label="Help">
+    <div class="shortcuts__panel">
+        <div class="shortcuts__head">
+            <div class="shortcuts__tabs" role="tablist">
+                <button type="button" class="shortcuts__tab is-active" data-tab="keys" role="tab" aria-selected="true">keys</button>
+                <button type="button" class="shortcuts__tab" data-tab="concepts" role="tab" aria-selected="false">concepts</button>
+            </div>
+            <button type="button" class="shortcuts__close" data-shortcuts-toggle aria-label="Close">esc</button>
+        </div>
+
+        <div class="shortcuts__pane is-active" data-pane="keys">
+            <dl class="shortcuts__list">
+                <dt><kbd>/</kbd></dt><dd>focus filter</dd>
+                <dt><kbd>j</kbd> <kbd>k</kbd></dt><dd>next / previous row</dd>
+                <dt><kbd>↵</kbd></dt><dd>open selected script</dd>
+                <dt><kbd>⌘K</kbd></dt><dd>focus filter</dd>
+                <dt><kbd>g</kbd> <kbd>h</kbd></dt><dd>go to scripts</dd>
+                <dt><kbd>g</kbd> <kbd>a</kbd></dt><dd>go to audit</dd>
+                @if (isAdmin)
+                {
+                    <dt><kbd>g</kbd> <kbd>u</kbd></dt><dd>go to users</dd>
+                    <dt><kbd>g</kbd> <kbd>c</kbd></dt><dd>go to categories</dd>
+                }
+                <dt><kbd>?</kbd></dt><dd>toggle this panel</dd>
+            </dl>
+            <p class="shortcuts__hint">shortcuts ignore typing in inputs.</p>
+        </div>
+
+        <div class="shortcuts__pane" data-pane="concepts" hidden>
+            <dl class="shortcuts__list shortcuts__list--concepts">
+                <dt>script</dt><dd>a PowerShell file you can run, schedule, or audit.</dd>
+                <dt>category</dt><dd>access boundary. you only see and run scripts in categories you've been granted.</dd>
+                <dt>job</dt><dd>one execution of a script. has a status and a record kept in the audit log.</dd>
+                <dt>recurring</dt><dd>a job scheduled to repeat on a cron. cancel from the script's details.</dd>
+                <dt>role</dt><dd>what an account can do. <code>Author</code> can edit scripts; <code>Launcher</code> can run them; <code>Administrator</code> can manage access. a user needs at least one role to do anything.</dd>
+                <dt>access</dt><dd>roles answer "what can you do," categories answer "to which scripts." both are required.</dd>
+                <dt>status</dt><dd><span class="status" data-state="running">running</span> active now · <span class="status" data-state="completed">completed</span> finished cleanly · <span class="status" data-state="failed">failed</span> threw an error · <span class="status" data-state="scheduled">scheduled</span> queued · <span class="status" data-state="warning">cancelled</span> stopped.</dd>
+                <dt>amber pulse</dt><dd>not a warning. it's the running indicator — sodium-amber, the colour of a runway light.</dd>
+            </dl>
+        </div>
     </div>
+</div>
 
-    <environment names="Development">
-        <script src="~/lib/jquery/dist/jquery.js"></script>
-        <script src="~/lib/bootstrap/dist/js/bootstrap.js"></script>
-        <script src="~/js/site.js" asp-append-version="true"></script>
-    </environment>
-    <environment names="Staging,Production">
-        <script src="https://ajax.aspnetcdn.com/ajax/jquery/jquery-2.2.0.min.js"
-                asp-fallback-src="~/lib/jquery/dist/jquery.min.js"
-                asp-fallback-test="window.jQuery"
-                crossorigin="anonymous"
-                integrity="sha384-K+ctZQ+LL8q6tP7I94W+qzQsfRV2a+AfHIi9k8z8l9ggpc8X+Ytst4yBo/hH+8Fk">
-        </script>
-        <script src="https://ajax.aspnetcdn.com/ajax/bootstrap/3.3.7/bootstrap.min.js"
-                asp-fallback-src="~/lib/bootstrap/dist/js/bootstrap.min.js"
-                asp-fallback-test="window.jQuery && window.jQuery.fn && window.jQuery.fn.modal"
-                crossorigin="anonymous"
-                integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa">
-        </script>
-        <script src="~/js/site.min.js" asp-append-version="true"></script>
-    </environment>
-
-    @RenderSection("Scripts", required: false)
+<script src="~/js/site.js" asp-append-version="true"></script>
+@await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
