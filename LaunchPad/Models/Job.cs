@@ -33,6 +33,11 @@ namespace LaunchPad.Models
         [Display(Name = "User")]
         public string UserName { get; set; }
         public string Outcome { get; set; }
+
+        // JSON-encoded params used to launch this job (null when no params).
+        // Surfaced on the Details page as the "params echoed back" line beneath the running strip.
+        public string Args { get; set; }
+
         public JobType JobType { get; set; }
         public Status Status { get; set; }
 

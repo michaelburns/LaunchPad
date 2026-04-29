@@ -23,6 +23,9 @@ namespace LaunchPad.Data
         // Jobs
         IQueryable<Job> GetJobs();
         Job GetJobById(int jobId);
+        // Bypasses the EF change tracker — use during a running job to detect cancellation
+        // requested through a separate scope (the controller's CancelRunningJob action).
+        Status? GetJobStatusFresh(int jobId);
         void InsertJob(Job job);
         void DeleteJob(int jobId);
         void UpdateJob(Job job);

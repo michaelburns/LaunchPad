@@ -60,6 +60,14 @@ namespace LaunchPad.Data
             return _context.Jobs.FirstOrDefault(j => j.Id == jobId);
         }
 
+        public Status? GetJobStatusFresh(int jobId)
+        {
+            return _context.Jobs.AsNoTracking()
+                .Where(j => j.Id == jobId)
+                .Select(j => (Status?)j.Status)
+                .FirstOrDefault();
+        }
+
         public void InsertJob(Job job)
         {
             _context.Jobs.Add(job);

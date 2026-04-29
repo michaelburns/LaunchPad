@@ -1,5 +1,4 @@
 ﻿using LaunchPad.Models;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace LaunchPad.Data
