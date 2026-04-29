@@ -45,10 +45,27 @@
 
     // First line of the outcome, capped, used as a tooltip on failed-row status pills
     // so an operator can peek at the failure reason without clicking through.
+    // Outcome is segment JSON for structured runs — pull the first text segment if
+    // we can, otherwise treat the input as plain text.
     string firstLine(string s) {
         if (string.IsNullOrEmpty(s)) return "";
-        var i = s.IndexOf('\n');
-        var line = i >= 0 ? s.Substring(0, i) : s;
+        var candidate = s;
+        if (s.Length > 0 && (s[0] == '[' || s[0] == '{')) {
+            try {
+                var doc = System.Text.Json.JsonDocument.Parse(s);
+                if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array) {
+                    foreach (var seg in doc.RootElement.EnumerateArray()) {
+                        if (seg.TryGetProperty("t", out var t) && t.GetString() == "text"
+                            && seg.TryGetProperty("v", out var v)) {
+                            candidate = v.GetString() ?? s;
+                            break;
+                        }
+                    }
+                }
+            } catch { /* not JSON; treat as plain text */ }
+        }
+        var i = candidate.IndexOf('\n');
+        var line = i >= 0 ? candidate.Substring(0, i) : candidate;
         line = line.Trim();
         return line.Length > 200 ? line.Substring(0, 200) + "…" : line;
     }

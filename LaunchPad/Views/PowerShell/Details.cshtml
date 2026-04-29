@@ -296,15 +296,133 @@
         font-size: var(--t-ui);
         line-height: 1.6;
         color: var(--fg-0);
-        white-space: pre-wrap;
         overflow-x: auto;
         min-height: 6em;
-        max-height: 480px;
+        max-height: 560px;
         overflow-y: auto;
         letter-spacing: 0;
+        /* Typed segments stack vertically with a small rhythm between them. */
+        display: flex;
+        flex-direction: column;
+        gap: var(--s-md);
     }
-    .output-block.is-empty { color: var(--fg-3); font-style: normal; }
+    .output-block.is-empty { color: var(--fg-3); font-style: normal; gap: 0; }
     .output-block.is-running { border-color: color-mix(in oklab, var(--accent) 50%, var(--rule-strong)); }
+
+    /* Text segment: a contiguous run of lines from Write-Output / Write-Host etc. */
+    .seg-text {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono);
+        white-space: pre-wrap;
+        margin: 0;
+        color: inherit;
+    }
+
+    /* Inline table segment — a homogeneous run of PSObjects rendered as data, not
+       as text. Sits inside the console surface, hairline-bordered, sticky header. */
+    .seg-table {
+        background: oklch(11% 0.014 260);
+        border: 1px solid var(--rule);
+        border-radius: 3px;
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    .seg-table__head {
+        display: flex;
+        align-items: center;
+        gap: var(--s-sm);
+        padding: 0.5em 0.8em;
+        border-bottom: 1px solid var(--rule);
+        background: color-mix(in oklab, var(--bg-1) 60%, oklch(11% 0.014 260));
+    }
+    .seg-table__count {
+        font-size: var(--t-micro);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--fg-3);
+    }
+    .seg-table__schema {
+        font-size: var(--t-micro);
+        color: var(--fg-3);
+        margin-left: auto;
+        max-width: 50%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .seg-table__scroll {
+        max-height: 320px;
+        overflow: auto;
+    }
+    .seg-table table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    .seg-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        text-align: left;
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-micro);
+        text-transform: lowercase;
+        letter-spacing: 0;
+        color: var(--fg-2);
+        font-weight: 600;
+        padding: 0.45em 0.8em;
+        background: oklch(13% 0.014 260);
+        border-bottom: 1px solid var(--rule);
+        white-space: nowrap;
+    }
+    .seg-table tbody td {
+        padding: 0.4em 0.8em;
+        border-bottom: 1px solid color-mix(in oklab, var(--rule) 50%, transparent);
+        color: var(--fg-1);
+        vertical-align: top;
+        max-width: 32ch;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .seg-table tbody tr:last-child td { border-bottom: none; }
+    .seg-table tbody tr:hover td { background: color-mix(in oklab, var(--accent) 4%, transparent); }
+    /* Numeric / boolean cells right-align for scannability. */
+    .seg-table td.is-num { text-align: right; font-variant-numeric: tabular-nums; }
+    .seg-table td.is-bool-true { color: var(--ok); }
+    .seg-table td.is-bool-false { color: var(--fg-3); }
+    .seg-table td.is-null { color: var(--fg-3); font-style: italic; }
+
+    /* Toggle in the output block head: structured | raw */
+    .output-toggle {
+        display: inline-flex;
+        gap: 0;
+        margin-left: auto;
+        border: 1px solid var(--rule);
+        border-radius: 3px;
+        overflow: hidden;
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+    }
+    .output-toggle button {
+        background: transparent;
+        color: var(--fg-3);
+        border: none;
+        padding: 0.15em 0.55em;
+        font: inherit;
+        font-size: var(--t-micro);
+        text-transform: lowercase;
+        letter-spacing: 0;
+        cursor: pointer;
+    }
+    .output-toggle button + button { border-left: 1px solid var(--rule); }
+    .output-toggle button:hover { color: var(--fg-1); background: var(--bg-1); }
+    .output-toggle button.is-active { color: var(--fg-0); background: var(--bg-2); }
     .output-cursor {
         display: inline-block;
         width: 0.5em; height: 1em;
@@ -574,7 +692,7 @@
             <span class="block__meta" data-output-meta>
                 @if (runningJob != null)
                 {
-                    <text>running · output appears when the run completes</text>
+                    <text>running · streaming live</text>
                 }
                 else if (lastJob != null)
                 {
@@ -585,15 +703,19 @@
                     <text>no runs yet</text>
                 }
             </span>
+            <div class="output-toggle" role="tablist" aria-label="output view">
+                <button type="button" class="is-active" data-output-mode="structured" role="tab" aria-selected="true">table</button>
+                <button type="button" data-output-mode="raw" role="tab" aria-selected="false">raw</button>
+            </div>
         </header>
         @{
             var initialOutput = runningJob != null
-                ? string.Empty
+                ? (runningJob.Outcome ?? "")
                 : (lastJob?.Outcome ?? "");
             var emptyClass = string.IsNullOrEmpty(initialOutput) ? " is-empty" : "";
             var runningClass = runningJob != null ? " is-running" : "";
         }
-        <pre class="output-block@(emptyClass)@(runningClass)" data-output>@(string.IsNullOrEmpty(initialOutput) ? (runningJob != null ? "$ waiting for output…" : "$ no output yet") : initialOutput)</pre>
+        <div class="output-block@(emptyClass)@(runningClass)" data-output data-output-raw="@System.Net.WebUtility.HtmlEncode(initialOutput)"></div>
     </section>
 
     <section class="block">

@@ -100,11 +100,13 @@ namespace LaunchPad.Services
         [AutomaticRetry(Attempts = 0)]
         public void Run(string name, Dictionary<string, string> psParams) => RunStreaming(name, psParams);
 
-        // Streaming PowerShell run. Captures all output streams into a StringBuilder and
-        // flushes the running text to the Job.Outcome column at most every 250ms — the
-        // Details page polls this row and renders it as a live console. A separate poll
-        // checks the job status (AsNoTracking, fresh from DB) so the controller's
-        // CancelRunningJob action can stop the runspace cooperatively.
+        // Streaming PowerShell run. Drops Out-String so we capture raw PSObjects, then
+        // emits a typed segment stream (text + table) into Job.Outcome as JSON. The
+        // Details renderer reads the JSON and paints text segments as console lines and
+        // table segments as inline tables. A separate poll checks the job status
+        // (AsNoTracking, fresh from DB) so the controller's CancelRunningJob action can
+        // stop the runspace cooperatively. Pre-feature outcomes (plain text) still
+        // render correctly via the parse-fail fallback on the client.
         private void RunStreaming(string name, Dictionary<string, string> psParams)
         {
             var initial = InitialSessionState.CreateDefault();
@@ -121,8 +123,8 @@ namespace LaunchPad.Services
             using var ps = PowerShell.Create();
             ps.Runspace = runspace;
 
-            var sb = new StringBuilder();
-            var sbLock = new object();
+            var segments = new List<OutputSegment>();
+            var segLock = new object();
             var lastFlush = DateTime.UtcNow.AddSeconds(-1);
             var dirty = false;
             int? jobIdCache = null;
@@ -140,13 +142,21 @@ namespace LaunchPad.Services
                 return jobIdCache;
             }
 
+            string Serialize()
+            {
+                lock (segLock)
+                {
+                    return System.Text.Json.JsonSerializer.Serialize(segments);
+                }
+            }
+
             void Flush(bool force = false)
             {
                 string snapshot;
-                lock (sbLock)
+                lock (segLock)
                 {
                     if (!dirty && !force) return;
-                    snapshot = sb.ToString();
+                    snapshot = System.Text.Json.JsonSerializer.Serialize(segments);
                     dirty = false;
                 }
                 var id = FindJobId();
@@ -159,30 +169,114 @@ namespace LaunchPad.Services
                 lastFlush = DateTime.UtcNow;
             }
 
-            void Append(string s)
+            // Append a text line. Coalesce into the trailing text segment if there is one,
+            // otherwise start a new text segment.
+            void AppendText(string s)
             {
-                if (string.IsNullOrEmpty(s)) return;
-                lock (sbLock)
+                if (s == null) return;
+                lock (segLock)
                 {
-                    sb.AppendLine(s);
+                    var last = segments.Count > 0 ? segments[^1] : null;
+                    if (last != null && last.T == "text")
+                    {
+                        last.V = (last.V ?? "") + (last.V?.Length > 0 ? "\n" : "") + s;
+                    }
+                    else
+                    {
+                        segments.Add(new OutputSegment { T = "text", V = s });
+                    }
                     dirty = true;
                 }
                 if ((DateTime.UtcNow - lastFlush).TotalMilliseconds >= 250) Flush();
             }
 
+            // Append a structured object as a table row. Coalesce into the trailing table
+            // segment if the column shape matches; otherwise start a new table segment.
+            void AppendObject(PSObject obj)
+            {
+                if (obj == null) return;
+
+                // String-like, value-types, and property-less objects get text treatment.
+                if (obj.BaseObject == null
+                    || obj.BaseObject is string
+                    || obj.BaseObject is System.ValueType
+                    || obj.Properties == null)
+                {
+                    AppendText(obj.ToString());
+                    return;
+                }
+
+                var props = obj.Properties.Take(8).ToList();
+                if (props.Count == 0)
+                {
+                    AppendText(obj.ToString());
+                    return;
+                }
+
+                var cols = props.Select(p => p.Name).ToList();
+                var row = props.Select(p => CoerceValue(p.Value)).ToList();
+
+                lock (segLock)
+                {
+                    var last = segments.Count > 0 ? segments[^1] : null;
+                    if (last != null && last.T == "table"
+                        && last.Cols != null && last.Cols.SequenceEqual(cols))
+                    {
+                        last.Rows!.Add(row);
+                    }
+                    else
+                    {
+                        segments.Add(new OutputSegment
+                        {
+                            T = "table",
+                            Cols = cols,
+                            Rows = new List<List<object?>> { row }
+                        });
+                    }
+                    dirty = true;
+                }
+                if ((DateTime.UtcNow - lastFlush).TotalMilliseconds >= 250) Flush();
+            }
+
+            // Coerce a property value to a JSON-friendly primitive. PSCustomObject
+            // properties commonly arrive wrapped in a PSObject — unwrap to the
+            // underlying CLR type before deciding the JSON shape so numbers stay
+            // numeric (Phase 2 sort relies on this).
+            static object? CoerceValue(object? v)
+            {
+                if (v is PSObject ps) v = ps.BaseObject;
+                return v switch
+                {
+                    null => null,
+                    bool b => b,
+                    int i => i,
+                    long l => l,
+                    short sh => (int)sh,
+                    byte by => (int)by,
+                    double d => d,
+                    float f => (double)f,
+                    decimal dec => (double)dec,
+                    string s => s,
+                    System.DateTime dt => dt.ToString("o"),
+                    System.Enum e => e.ToString(),
+                    _ => v.ToString()
+                };
+            }
+
             // Subscribe to every PowerShell stream the operator might care about.
             ps.Streams.Information.DataAdded += (_, e) =>
-                Append(ps.Streams.Information[e.Index]?.MessageData?.ToString());
+                AppendText(ps.Streams.Information[e.Index]?.MessageData?.ToString() ?? "");
             ps.Streams.Verbose.DataAdded += (_, e) =>
-                Append("VERBOSE: " + ps.Streams.Verbose[e.Index]?.Message);
+                AppendText("VERBOSE: " + ps.Streams.Verbose[e.Index]?.Message);
             ps.Streams.Warning.DataAdded += (_, e) =>
-                Append("WARNING: " + ps.Streams.Warning[e.Index]?.Message);
+                AppendText("WARNING: " + ps.Streams.Warning[e.Index]?.Message);
             ps.Streams.Error.DataAdded += (_, e) =>
-                Append("ERROR: " + (ps.Streams.Error[e.Index]?.Exception?.Message ?? ps.Streams.Error[e.Index]?.ToString()));
+                AppendText("ERROR: " + (ps.Streams.Error[e.Index]?.Exception?.Message ?? ps.Streams.Error[e.Index]?.ToString()));
 
-            // Build the command chain. Inline script (so source-on-disk semantics
-            // match the previous behaviour) + positional params + Out-String to
-            // collapse PSObjects into readable text for the live console.
+            // Build the command chain. We deliberately do NOT add Out-String here —
+            // we want the raw PSObjects so we can render them as tables. The
+            // typed-segment renderer on the client falls back to text for non-tabular
+            // shapes, so behaviour is graceful for every script.
             if (psParams != null && psParams.Count > 0)
             {
                 var cmd = new Command(_scriptIO.FileLocation(name));
@@ -196,10 +290,9 @@ namespace LaunchPad.Services
             {
                 ps.AddScript(_scriptIO.Read(name));
             }
-            ps.AddCommand("Out-String");
 
             var output = new PSDataCollection<PSObject>();
-            output.DataAdded += (_, e) => Append(output[e.Index]?.ToString());
+            output.DataAdded += (_, e) => AppendObject(output[e.Index]);
 
             var asyncResult = ps.BeginInvoke<PSObject, PSObject>(null, output);
 
@@ -224,12 +317,13 @@ namespace LaunchPad.Services
             Flush(force: true); // guaranteed final flush
 
             // Preserve the existing post-run contract: SaveResults writes Script.LastOutput,
-            // which the UpdateJobStatusFilter then reads when marking the job Completed.
-            // We hand it the same text the live console already saw.
+            // which the UpdateJobStatusFilter then copies into Outcome on Completed. We
+            // write the same JSON snapshot so the filter's overwrite is a no-op for
+            // structured runs (and stays correct text for legacy code paths).
             var script2 = _scriptRepository.GetScripts().FirstOrDefault(s => s.Name == name);
             if (script2 != null)
             {
-                script2.LastOutput = sb.ToString();
+                script2.LastOutput = Serialize();
                 _scriptRepository.UpdateScript(script2);
                 try { _scriptRepository.Save(); } catch { /* swallow — flush already persisted Outcome */ }
             }

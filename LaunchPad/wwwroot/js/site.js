@@ -374,10 +374,22 @@
   };
 
   // First line of an outcome string, capped — used for the failed-row tooltip.
+  // Outcome is now segment JSON for structured runs; try to parse and extract the
+  // first text segment, otherwise treat the input as plain text.
   const firstLineOf = (s) => {
     if (!s) return '';
-    const i = s.indexOf('\n');
-    let line = i >= 0 ? s.slice(0, i) : s;
+    let candidate = s;
+    if (s.length > 0 && (s[0] === '[' || s[0] === '{')) {
+      try {
+        const parsed = JSON.parse(s);
+        if (Array.isArray(parsed)) {
+          const firstText = parsed.find((seg) => seg && seg.t === 'text' && seg.v);
+          if (firstText) candidate = firstText.v;
+        }
+      } catch (_) { /* fall through to raw text */ }
+    }
+    const i = candidate.indexOf('\n');
+    let line = i >= 0 ? candidate.slice(0, i) : candidate;
     line = line.trim();
     return line.length > 200 ? line.slice(0, 200) + '…' : line;
   };
@@ -511,35 +523,170 @@
     };
     setInterval(tickElapsed, 1000);
 
-    let lastOutputLength = outputEl ? outputEl.textContent.length : 0;
     const isAtBottom = (el) => el && (el.scrollHeight - el.scrollTop - el.clientHeight) < 8;
+
+    // ---------- Typed segment renderer --------------------------
+    // Job.Outcome is now a JSON array of segments (text | table). Pre-feature jobs
+    // stored plain text — those parse-fail and render as a single text segment via
+    // the fallback below. The renderer is mode-aware: 'structured' paints tables
+    // as real <table> elements; 'raw' flattens everything to plain text.
+    let outputMode = 'structured';
+    let lastRendered = ''; // last raw string we rendered, to skip no-op repaints
+
+    const parseSegments = (raw) => {
+      if (!raw || typeof raw !== 'string') return null;
+      const t = raw.trimStart();
+      if (!t.startsWith('[') && !t.startsWith('{')) return null;
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)
+            && parsed.every((s) => s && typeof s === 'object' && typeof s.t === 'string')) {
+          return parsed;
+        }
+      } catch (_) { /* not JSON; treat as plain text */ }
+      return null;
+    };
+
+    const cellClass = (v) => {
+      if (v === null || v === undefined) return 'is-null';
+      if (typeof v === 'number') return 'is-num';
+      if (typeof v === 'boolean') return v ? 'is-bool-true' : 'is-bool-false';
+      return '';
+    };
+    const cellDisplay = (v) => {
+      if (v === null || v === undefined) return '∅';
+      if (typeof v === 'boolean') return v ? 'true' : 'false';
+      return String(v);
+    };
+
+    const renderSegmentsHtml = (segments) => segments.map((seg) => {
+      if (seg.t === 'text') {
+        const v = seg.v || '';
+        if (!v) return '';
+        return `<pre class="seg-text">${escapeHtml(v)}</pre>`;
+      }
+      if (seg.t === 'table') {
+        const cols = seg.cols || [];
+        const rows = seg.rows || [];
+        const colsHtml = cols.map((c) => `<th>${escapeHtml(c)}</th>`).join('');
+        const rowsHtml = rows.map((row) => {
+          const tds = cols.map((_, i) => {
+            const v = row[i];
+            const cls = cellClass(v);
+            const text = escapeHtml(cellDisplay(v));
+            const title = (v !== null && v !== undefined) ? ` title="${escapeHtml(String(v))}"` : '';
+            return `<td class="${cls}"${title}>${text}</td>`;
+          }).join('');
+          return `<tr>${tds}</tr>`;
+        }).join('');
+        const schema = cols.length > 0 ? cols.join(' · ') : '';
+        return ''
+          + '<div class="seg-table">'
+          + '<div class="seg-table__head">'
+          + `<span class="seg-table__count">${rows.length} ${rows.length === 1 ? 'row' : 'rows'}</span>`
+          + (schema ? `<span class="seg-table__schema">${escapeHtml(schema)}</span>` : '')
+          + '</div>'
+          + '<div class="seg-table__scroll"><table>'
+          + `<thead><tr>${colsHtml}</tr></thead>`
+          + `<tbody>${rowsHtml}</tbody>`
+          + '</table></div>'
+          + '</div>';
+      }
+      return '';
+    }).join('');
+
+    // Flatten segments to plain text — used by the 'raw' toggle and as a fallback.
+    const flattenSegments = (segments) => segments.map((seg) => {
+      if (seg.t === 'text') return seg.v || '';
+      if (seg.t === 'table') {
+        const cols = seg.cols || [];
+        const rows = seg.rows || [];
+        if (cols.length === 0 || rows.length === 0) return '';
+        // Compute column widths from the data so the text view aligns.
+        const widths = cols.map((c, i) => Math.max(
+          c.length,
+          ...rows.map((r) => String(r[i] === null || r[i] === undefined ? '' : r[i]).length)
+        ));
+        const pad = (s, w) => String(s).padEnd(w);
+        const head = cols.map((c, i) => pad(c, widths[i])).join('  ');
+        const sep  = widths.map((w) => '─'.repeat(w)).join('  ');
+        const body = rows.map((r) => cols.map((_, i) => {
+          const v = r[i];
+          return pad(v === null || v === undefined ? '' : String(v), widths[i]);
+        }).join('  ')).join('\n');
+        return `${head}\n${sep}\n${body}`;
+      }
+      return '';
+    }).join('\n\n');
+
+    const renderInto = (raw, mode) => {
+      const wasAtBottom = isAtBottom(outputEl);
+      const segments = parseSegments(raw);
+
+      let html;
+      const isPlaceholder = !raw || raw.length === 0
+        || (typeof raw === 'string' && raw.startsWith('$ '));
+      const placeholder = !raw || raw.length === 0 ? '$ no output yet' : raw;
+
+      if (segments && segments.length > 0) {
+        html = mode === 'raw'
+          ? `<pre class="seg-text">${escapeHtml(flattenSegments(segments))}</pre>`
+          : renderSegmentsHtml(segments);
+      } else {
+        // Plain text or pre-feature outcome — render as a single text segment.
+        html = `<pre class="seg-text">${escapeHtml(placeholder)}</pre>`;
+      }
+      outputEl.classList.toggle('is-empty', isPlaceholder && !segments);
+      outputEl.innerHTML = html;
+      if (wasAtBottom) outputEl.scrollTop = outputEl.scrollHeight;
+    };
 
     const updateOutput = (running, recent) => {
       if (!outputEl) return;
-      const wasAtBottom = isAtBottom(outputEl);
-      let text;
+      let raw = '';
       let meta;
       if (running) {
-        text = running.outcome && running.outcome.length > 0 ? running.outcome : '$ waiting for output…';
-        meta = 'running · output appears when the run completes';
+        raw = running.outcome && running.outcome.length > 0 ? running.outcome : '';
+        meta = 'running · streaming live';
         outputEl.classList.add('is-running');
       } else if (recent && recent.length > 0) {
         const last = recent[0];
-        text = last.outcome && last.outcome.length > 0 ? last.outcome : '$ no output captured';
+        raw = last.outcome && last.outcome.length > 0 ? last.outcome : '';
         meta = 'last run · ' + agoLong(new Date(last.started)) + ' · ' + (last.status || '').toLowerCase();
         outputEl.classList.remove('is-running');
       } else {
-        text = '$ no output yet';
+        raw = '';
         meta = 'no runs yet';
         outputEl.classList.remove('is-running');
       }
-      outputEl.classList.toggle('is-empty', text.startsWith('$ '));
-      if (text !== outputEl.textContent) {
-        outputEl.textContent = text;
-        if (wasAtBottom) outputEl.scrollTop = outputEl.scrollHeight;
-      }
       if (outputMeta) outputMeta.textContent = meta;
+      if (raw === lastRendered) return; // no change, no repaint
+      lastRendered = raw;
+      renderInto(raw || '', outputMode);
     };
+
+    // Initial paint from the server-rendered data-output-raw attribute (so the page
+    // shows the outcome correctly before the first heartbeat tick lands).
+    if (outputEl) {
+      const initialRaw = outputEl.getAttribute('data-output-raw') || '';
+      lastRendered = initialRaw;
+      renderInto(initialRaw, outputMode);
+    }
+
+    // Toggle wiring: structured ↔ raw.
+    document.querySelectorAll('[data-output-mode]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const next = btn.getAttribute('data-output-mode');
+        if (next === outputMode) return;
+        outputMode = next;
+        document.querySelectorAll('[data-output-mode]').forEach((b) => {
+          const active = b === btn;
+          b.classList.toggle('is-active', active);
+          b.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        renderInto(lastRendered, outputMode);
+      });
+    });
 
     const argsStrip = detailsRoot.querySelector('[data-running-args]');
     const argsList = detailsRoot.querySelector('[data-running-args-list]');
