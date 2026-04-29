@@ -20,13 +20,20 @@ LaunchPad.sln.DotSettings.user
 *.nupkg
 **/packages/
 
-# Bower / npm
-LaunchPad/wwwroot/lib/
+# Bower / npm — exclude everything inside lib/ except the vendored CodeMirror
+# bundle, which is committed so the app works offline without a CDN.
+LaunchPad/wwwroot/lib/*
+!LaunchPad/wwwroot/lib/codemirror/
 node_modules/
 
-# Entity Framework Migrations
-LaunchPad/Data/Migrations/
-LaunchPad/Migrations/
+# SQLite databases (created at runtime)
+LaunchPad/*.db
+LaunchPad/*.db-journal
+LaunchPad/*.db-wal
+LaunchPad/*.db-shm
+
+# Local PowerShell script folder (created at runtime; do not commit)
+LaunchPad/Scripts/
 
 # User-specific configuration
 appsettings.*.local.json

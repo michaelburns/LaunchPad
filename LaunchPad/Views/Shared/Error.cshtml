@@ -1,14 +1,21 @@
-﻿@{
+@{
     ViewData["Title"] = "Error";
 }
 
-<h1 class="text-danger">Error.</h1>
-<h2 class="text-danger">An error occurred while processing your request.</h2>
+<div style="max-width: 60ch;">
+    <h1 style="margin-bottom: var(--s-sm);">Something broke.</h1>
+    <p class="muted" style="font-size: var(--t-body); margin-bottom: var(--s-lg); line-height: 1.55;">
+        The request didn't complete. We've stopped and unwound. If this keeps happening on the same page, it's worth a look.
+    </p>
 
-<h3>Development Mode</h3>
-<p>
-    Swapping to <strong>Development</strong> environment will display more detailed information about the error that occurred.
-</p>
-<p>
-    <strong>Development environment should not be enabled in deployed applications</strong>, as it can result in sensitive information from exceptions being displayed to end users. For local debugging, development environment can be enabled by setting the <strong>ASPNETCORE_ENVIRONMENT</strong> environment variable to <strong>Development</strong>, and restarting the application.
-</p>
+    <div class="console" style="margin-bottom: var(--s-lg);">
+<span style="color: var(--fg-3)">$</span> tail -n 1 launchpad.log
+<span style="color: var(--fail)">[error]</span> request failed &mdash; details suppressed in production.
+</div>
+
+    <p class="muted" style="font-size: var(--t-meta); margin-bottom: var(--s-lg);">
+        To see the underlying exception, run with <code>ASPNETCORE_ENVIRONMENT=Development</code> and reload. Don't enable Development on a deployed instance.
+    </p>
+
+    <a class="btn" href="/">← Back to home</a>
+</div>

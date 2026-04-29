@@ -19,14 +19,21 @@ namespace LaunchPad.Controllers
 
         protected IEnumerable<int> GetUserCategoryIds()
         {
+            var rawName = User.Identity?.Name;
+            if (string.IsNullOrEmpty(rawName))
+                return Enumerable.Empty<int>();
+
+            var bareName = rawName.Contains('\\') ? rawName.Split('\\', 2)[1] : rawName;
+            var lowered = bareName.ToLowerInvariant();
+
             var user = _context.Users
                                 .Include(ur => ur.UserRoles)
                                 .ThenInclude(ur => ur.Role)
                                 .Include(ur => ur.Categories)
                                 .ThenInclude(ur => ur.Category)
                                 .AsNoTracking()
-                                .FirstOrDefault(u => String.Equals(u.Username, User.Identity.Name, StringComparison.CurrentCultureIgnoreCase));
-            return user.Categories.Select(x => x.CategoryId);
+                                .FirstOrDefault(u => u.Username.ToLower() == lowered);
+            return user?.Categories.Select(x => x.CategoryId) ?? Enumerable.Empty<int>();
         }
 
         protected bool UserHasAccessToCategory(int categoryId)

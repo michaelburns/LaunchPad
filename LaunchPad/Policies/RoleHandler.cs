@@ -18,11 +18,19 @@ namespace LaunchPad.Policies
         }
         protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, RoleRequirement requirement)
         {
+            var rawName = context.User.Identity?.Name;
+            if (string.IsNullOrEmpty(rawName))
+                return Task.CompletedTask;
+
+            // Negotiate yields names like DOMAIN\user; match against the bare username.
+            var bareName = rawName.Contains('\\') ? rawName.Split('\\', 2)[1] : rawName;
+            var lowered = bareName.ToLowerInvariant();
+
             var user = _context.Users
                 .Include(ur => ur.UserRoles)
                 .ThenInclude(ur => ur.Role)
                 .AsNoTracking()
-                .FirstOrDefault(u => String.Equals(u.Username, context.User.Identity.Name, StringComparison.CurrentCultureIgnoreCase));
+                .FirstOrDefault(u => u.Username.ToLower() == lowered);
 
             if (user == null)
                 return Task.CompletedTask;

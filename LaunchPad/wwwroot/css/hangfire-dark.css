@@ -1,0 +1,338 @@
+/* ============================================================
+   Hangfire dashboard — dark theme overrides
+   ------------------------------------------------------------
+   Hangfire's dashboard is Bootstrap 3 + a few custom classes.
+   We can't change its markup, so this is a high-specificity
+   override sheet matching the LaunchPad tokens, injected just
+   before </head> by middleware in Program.cs.
+   ============================================================ */
+
+:root {
+  --hd-bg-0: oklch(11% 0.014 260);
+  --hd-bg-1: oklch(17% 0.014 260);
+  --hd-bg-2: oklch(23% 0.015 260);
+  --hd-bg-3: oklch(30% 0.017 260);
+  --hd-fg-0: oklch(97% 0.008 80);
+  --hd-fg-1: oklch(86% 0.009 80);
+  --hd-fg-2: oklch(66% 0.011 80);
+  --hd-fg-3: oklch(56% 0.012 260);
+  --hd-rule: oklch(30% 0.014 260);
+  --hd-rule-strong: oklch(42% 0.016 260);
+  --hd-accent: oklch(74% 0.155 60);
+  --hd-accent-deep: oklch(58% 0.150 50);
+  --hd-fail: oklch(62% 0.180 25);
+  --hd-ok:   oklch(68% 0.130 145);
+  --hd-warn: oklch(76% 0.130 80);
+  --hd-info: oklch(66% 0.090 220);
+  color-scheme: dark;
+}
+
+html, body {
+  background: var(--hd-bg-0) !important;
+  color: var(--hd-fg-0) !important;
+}
+
+a { color: var(--hd-fg-1); }
+a:hover, a:focus { color: var(--hd-accent); text-decoration: none; }
+
+h1, h2, h3, h4, h5, h6 { color: var(--hd-fg-0); }
+hr { border-color: var(--hd-rule) !important; }
+
+/* Top navbar */
+.navbar { background: var(--hd-bg-1) !important; border-color: var(--hd-rule) !important; box-shadow: none !important; }
+.navbar-default { background-image: none !important; }
+.navbar-default .navbar-brand,
+.navbar-default .navbar-nav > li > a { color: var(--hd-fg-1) !important; }
+.navbar-default .navbar-brand:hover,
+.navbar-default .navbar-nav > li > a:hover,
+.navbar-default .navbar-nav > .active > a,
+.navbar-default .navbar-nav > .active > a:hover,
+.navbar-default .navbar-nav > .open > a {
+  background: var(--hd-bg-2) !important;
+  color: var(--hd-fg-0) !important;
+}
+.navbar-default .navbar-toggle { border-color: var(--hd-rule) !important; }
+.navbar-default .navbar-toggle:hover { background: var(--hd-bg-2) !important; }
+.navbar-default .navbar-toggle .icon-bar { background-color: var(--hd-fg-2) !important; }
+
+/* Containers */
+.container, .container-fluid { background: transparent; }
+
+/* Panels */
+.panel {
+  background: var(--hd-bg-1) !important;
+  border-color: var(--hd-rule) !important;
+  color: var(--hd-fg-1);
+  box-shadow: none !important;
+}
+.panel-heading,
+.panel-default > .panel-heading {
+  background: var(--hd-bg-2) !important;
+  border-color: var(--hd-rule) !important;
+  color: var(--hd-fg-0) !important;
+  background-image: none !important;
+}
+.panel-body { background: var(--hd-bg-1) !important; color: var(--hd-fg-1); }
+.panel-footer { background: var(--hd-bg-2) !important; border-color: var(--hd-rule) !important; color: var(--hd-fg-2); }
+.panel-title { color: var(--hd-fg-0); }
+
+/* Tables */
+.table {
+  color: var(--hd-fg-1) !important;
+  background: transparent !important;
+}
+.table > thead > tr > th {
+  color: var(--hd-fg-2);
+  border-color: var(--hd-rule-strong);
+  background: transparent;
+  font-weight: 600;
+}
+.table > tbody > tr > td,
+.table > tbody > tr > th,
+.table > tfoot > tr > td {
+  border-color: var(--hd-rule);
+  background: transparent;
+  color: var(--hd-fg-1);
+}
+.table-hover > tbody > tr:hover > td,
+.table-hover > tbody > tr:hover { background: var(--hd-bg-2) !important; }
+.table-striped > tbody > tr:nth-of-type(odd) > td,
+.table-striped > tbody > tr:nth-of-type(odd) { background: oklch(13% 0.014 260) !important; }
+.table-bordered,
+.table-bordered > thead > tr > th,
+.table-bordered > tbody > tr > td { border-color: var(--hd-rule) !important; }
+
+/* Wells */
+.well {
+  background: var(--hd-bg-1) !important;
+  border-color: var(--hd-rule) !important;
+  color: var(--hd-fg-1);
+  box-shadow: none !important;
+}
+
+/* Buttons */
+.btn-default {
+  background: var(--hd-bg-2) !important;
+  background-image: none !important;
+  color: var(--hd-fg-0) !important;
+  border-color: var(--hd-rule-strong) !important;
+  text-shadow: none !important;
+}
+.btn-default:hover, .btn-default:focus {
+  background: var(--hd-bg-3) !important;
+  border-color: var(--hd-fg-3) !important;
+  color: var(--hd-fg-0) !important;
+}
+.btn-primary {
+  background: var(--hd-accent) !important;
+  background-image: none !important;
+  border-color: var(--hd-accent) !important;
+  color: oklch(15% 0.020 50) !important;
+  text-shadow: none !important;
+}
+.btn-primary:hover, .btn-primary:focus {
+  background: var(--hd-accent-deep) !important;
+  border-color: var(--hd-accent-deep) !important;
+  color: var(--hd-fg-0) !important;
+}
+.btn-danger {
+  background: var(--hd-bg-2) !important;
+  color: var(--hd-fail) !important;
+  border-color: color-mix(in oklab, var(--hd-fail) 35%, var(--hd-rule-strong)) !important;
+  background-image: none !important;
+  text-shadow: none !important;
+}
+.btn-danger:hover {
+  background: color-mix(in oklab, var(--hd-fail) 12%, var(--hd-bg-2)) !important;
+  border-color: var(--hd-fail) !important;
+  color: var(--hd-fg-0) !important;
+}
+.btn-success {
+  background: var(--hd-bg-2) !important;
+  color: var(--hd-ok) !important;
+  border-color: color-mix(in oklab, var(--hd-ok) 35%, var(--hd-rule-strong)) !important;
+  background-image: none !important;
+  text-shadow: none !important;
+}
+.btn-success:hover {
+  background: color-mix(in oklab, var(--hd-ok) 12%, var(--hd-bg-2)) !important;
+  border-color: var(--hd-ok) !important;
+  color: var(--hd-fg-0) !important;
+}
+.btn-warning {
+  background: var(--hd-bg-2) !important;
+  color: var(--hd-warn) !important;
+  border-color: color-mix(in oklab, var(--hd-warn) 35%, var(--hd-rule-strong)) !important;
+  background-image: none !important;
+  text-shadow: none !important;
+}
+.btn-info {
+  background: var(--hd-bg-2) !important;
+  color: var(--hd-info) !important;
+  border-color: color-mix(in oklab, var(--hd-info) 35%, var(--hd-rule-strong)) !important;
+  background-image: none !important;
+  text-shadow: none !important;
+}
+
+/* Labels (status pills) */
+.label { font-weight: 500 !important; text-shadow: none !important; }
+.label-default { background: var(--hd-bg-3) !important; color: var(--hd-fg-1) !important; }
+.label-info {
+  background: color-mix(in oklab, var(--hd-info) 22%, var(--hd-bg-2)) !important;
+  color: var(--hd-info) !important;
+}
+.label-success {
+  background: color-mix(in oklab, var(--hd-ok) 22%, var(--hd-bg-2)) !important;
+  color: var(--hd-ok) !important;
+}
+.label-warning {
+  background: color-mix(in oklab, var(--hd-warn) 22%, var(--hd-bg-2)) !important;
+  color: var(--hd-warn) !important;
+}
+.label-danger {
+  background: color-mix(in oklab, var(--hd-fail) 22%, var(--hd-bg-2)) !important;
+  color: var(--hd-fail) !important;
+}
+.label-primary {
+  background: color-mix(in oklab, var(--hd-accent) 22%, var(--hd-bg-2)) !important;
+  color: var(--hd-accent) !important;
+}
+
+/* Text colour helpers */
+.text-muted { color: var(--hd-fg-2) !important; }
+.text-success { color: var(--hd-ok) !important; }
+.text-warning { color: var(--hd-warn) !important; }
+.text-danger  { color: var(--hd-fail) !important; }
+.text-info    { color: var(--hd-info) !important; }
+.text-primary { color: var(--hd-accent) !important; }
+
+/* Forms */
+.form-control,
+input[type="text"], input[type="search"], input[type="number"],
+select, textarea {
+  background: var(--hd-bg-1) !important;
+  border-color: var(--hd-rule-strong) !important;
+  color: var(--hd-fg-0) !important;
+  box-shadow: none !important;
+}
+.form-control:focus {
+  border-color: var(--hd-accent) !important;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--hd-accent) 18%, transparent) !important;
+  background: var(--hd-bg-2) !important;
+}
+.input-group-addon {
+  background: var(--hd-bg-2) !important;
+  border-color: var(--hd-rule-strong) !important;
+  color: var(--hd-fg-2) !important;
+}
+
+/* Code blocks (job exception traces) */
+pre, code, kbd, samp {
+  background: oklch(8% 0.012 260) !important;
+  color: var(--hd-fg-0) !important;
+  border-color: var(--hd-rule) !important;
+}
+pre { padding: 12px !important; }
+
+/* Dropdowns */
+.dropdown-menu {
+  background: var(--hd-bg-1) !important;
+  border-color: var(--hd-rule-strong) !important;
+  box-shadow: none !important;
+}
+.dropdown-menu > li > a { color: var(--hd-fg-1) !important; }
+.dropdown-menu > li > a:hover,
+.dropdown-menu > li > a:focus {
+  background: var(--hd-bg-2) !important;
+  color: var(--hd-fg-0) !important;
+}
+.dropdown-menu .divider { background: var(--hd-rule) !important; }
+
+/* Pagination */
+.pagination > li > a,
+.pagination > li > span {
+  background: var(--hd-bg-1) !important;
+  border-color: var(--hd-rule) !important;
+  color: var(--hd-fg-1) !important;
+}
+.pagination > li > a:hover {
+  background: var(--hd-bg-2) !important;
+  color: var(--hd-fg-0) !important;
+}
+.pagination > .active > a,
+.pagination > .active > span,
+.pagination > .active > a:hover {
+  background: var(--hd-accent) !important;
+  border-color: var(--hd-accent) !important;
+  color: oklch(15% 0.020 50) !important;
+}
+.pagination > .disabled > a,
+.pagination > .disabled > span {
+  background: var(--hd-bg-1) !important;
+  color: var(--hd-fg-3) !important;
+}
+
+/* Alerts */
+.alert {
+  background: var(--hd-bg-1) !important;
+  border-color: var(--hd-rule-strong) !important;
+  color: var(--hd-fg-1) !important;
+}
+.alert-success {
+  border-color: color-mix(in oklab, var(--hd-ok) 45%, var(--hd-rule-strong)) !important;
+  color: var(--hd-ok) !important;
+  background: color-mix(in oklab, var(--hd-ok) 8%, var(--hd-bg-1)) !important;
+}
+.alert-warning {
+  border-color: color-mix(in oklab, var(--hd-warn) 45%, var(--hd-rule-strong)) !important;
+  color: var(--hd-warn) !important;
+  background: color-mix(in oklab, var(--hd-warn) 8%, var(--hd-bg-1)) !important;
+}
+.alert-danger {
+  border-color: color-mix(in oklab, var(--hd-fail) 45%, var(--hd-rule-strong)) !important;
+  color: var(--hd-fail) !important;
+  background: color-mix(in oklab, var(--hd-fail) 8%, var(--hd-bg-1)) !important;
+}
+.alert-info {
+  border-color: color-mix(in oklab, var(--hd-info) 45%, var(--hd-rule-strong)) !important;
+  color: var(--hd-info) !important;
+  background: color-mix(in oklab, var(--hd-info) 8%, var(--hd-bg-1)) !important;
+}
+
+/* Hangfire-specific */
+.metric {
+  background: var(--hd-bg-1) !important;
+  color: var(--hd-fg-0) !important;
+  border: 1px solid var(--hd-rule) !important;
+  border-radius: 4px;
+  box-shadow: none !important;
+}
+.metric .title,
+.metric small,
+.metric .description { color: var(--hd-fg-2) !important; }
+.metric.metric-warning { background: color-mix(in oklab, var(--hd-warn) 12%, var(--hd-bg-1)) !important; border-color: color-mix(in oklab, var(--hd-warn) 35%, var(--hd-rule)) !important; }
+.metric.metric-danger  { background: color-mix(in oklab, var(--hd-fail) 12%, var(--hd-bg-1)) !important; border-color: color-mix(in oklab, var(--hd-fail) 35%, var(--hd-rule)) !important; }
+.metric.metric-success { background: color-mix(in oklab, var(--hd-ok)   12%, var(--hd-bg-1)) !important; border-color: color-mix(in oklab, var(--hd-ok)   35%, var(--hd-rule)) !important; }
+.metric.metric-info    { background: color-mix(in oklab, var(--hd-info) 12%, var(--hd-bg-1)) !important; border-color: color-mix(in oklab, var(--hd-info) 35%, var(--hd-rule)) !important; }
+.metric.highlighted    { background: color-mix(in oklab, var(--hd-accent) 12%, var(--hd-bg-1)) !important; border-color: color-mix(in oklab, var(--hd-accent) 45%, var(--hd-rule)) !important; }
+
+.dashboard-line-graph {
+  background: var(--hd-bg-1) !important;
+  border: 1px solid var(--hd-rule);
+  border-radius: 4px;
+}
+
+/* Backgrounds Hangfire sometimes applies inline */
+.bg-info, .bg-success, .bg-warning, .bg-danger {
+  background-color: var(--hd-bg-1) !important;
+  color: var(--hd-fg-1) !important;
+}
+
+/* Selection */
+::selection { background: oklch(45% 0.080 60) !important; color: var(--hd-fg-0); }
+
+/* Footer text */
+.copyright, .text-center.text-muted small { color: var(--hd-fg-3) !important; }
+
+/* Box-shadow softeners */
+.shadow, .well-sm, .well-lg { box-shadow: none !important; }
