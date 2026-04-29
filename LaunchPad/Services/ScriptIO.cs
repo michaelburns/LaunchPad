@@ -14,7 +14,7 @@ namespace LaunchPad.Services
         public ScriptIO(IConfiguration config)
         {
             _folderLocation = config["PowerShellScripts:FolderLocation"];
-            _extention = config["PowerShellScripts:FileExtention"];
+            _extention = config["PowerShellScripts:FileExtension"];
         }
 
 

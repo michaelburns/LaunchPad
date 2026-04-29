@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 using System.Text;
+using System.Threading;
 using Hangfire;
 using LaunchPad.Data;
 using LaunchPad.Models;
@@ -46,15 +47,6 @@ namespace LaunchPad.Services
         }
 
 
-        // Default Constructor For HangFire
-        public JobServices()
-        {
-            // disposable needs to be implemented
-            var options = new DbContextOptionsBuilder<ApplicationDbContext>();
-            options.UseSqlServer("Server=frcit-launchpad;Database=LaunchPad;Trusted_Connection=True;MultipleActiveResultSets=true"); // This needs to come from configuration. 
-            _scriptRepository = new ScriptRepository(new ApplicationDbContext(options.Options));
-        }
-
         //Laucnh/Schedule Jobs
         public void LaunchScript(string name, Script script)
         {
@@ -65,7 +57,8 @@ namespace LaunchPad.Services
                 ScriptId = script.Id,
                 Date = DateTime.Now,
                 JobId = Int32.Parse(BackgroundJob.Enqueue<IJobServices>(x => x.Run(script.Name))),
-                Status = Status.Started
+                Status = Status.Started,
+                Args = null
             };
             _scriptRepository.InsertJob(newJob);
             _scriptRepository.Save();
@@ -83,94 +76,165 @@ namespace LaunchPad.Services
                 ScriptId = script.Id,
                 Date = DateTime.Now,
                 JobId = Int32.Parse(BackgroundJob.Enqueue<IJobServices>(x => x.Run(script.Name, psParam.PSparams))),
-                Status = Status.Started
+                Status = Status.Started,
+                Args = SerializeArgs(psParam.PSparams)
             };
 
             _scriptRepository.InsertJob(newJob);
             _scriptRepository.Save();
         }
 
-        //Invoke Script
-        [UpdateJobStatusFilter, AutomaticRetry(Attempts = 0)]
-        public void Run(string name)
+        // Serialize the params dictionary so the Details page can echo them back live.
+        // Stored as a small JSON object on the Job row; null when there were no params.
+        private static string SerializeArgs(System.Collections.Generic.Dictionary<string, string> psParams)
         {
-            Debug.WriteLine("Inside the run method");
-            // Executionpolicy Bypass - Thanks to @ducke
-            // 
-            InitialSessionState initial = InitialSessionState.CreateDefault();
-
-            // Replace PSAuthorizationManager with a null manager
-            // which ignores execution policy 
-            initial.AuthorizationManager = new AuthorizationManager("Microsoft.PowerShell");
-
-            //Create Runspace
-            using (var runspace = RunspaceFactory.CreateRunspace(initial))
-            {
-                runspace.Open();
-
-                //Create Pipeline
-                using (var pipeline = runspace.CreatePipeline())
-                {
-                    //Pass in the Scripts texts
-                    pipeline.Commands.AddScript(_scriptIO.Read(name));
-                    pipeline.Commands.Add("Out-String");
-
-                    //Invoke and Save Results
-                    var results = pipeline.Invoke();
-                    SaveResults(name, results);
-                    runspace.Close();
-                }
-            }
-
+            if (psParams == null || psParams.Count == 0) return null;
+            return System.Text.Json.JsonSerializer.Serialize(psParams);
         }
 
-        //TODO: FOR TESTING WILL MERGE WITH RUN(name)!
+        //Invoke Script
+        [UpdateJobStatusFilter, AutomaticRetry(Attempts = 0)]
+        public void Run(string name) => RunStreaming(name, null);
+
         [UpdateJobStatusFilter]
         [AutomaticRetry(Attempts = 0)]
-        public void Run(string name, Dictionary<string, string> psParams)
+        public void Run(string name, Dictionary<string, string> psParams) => RunStreaming(name, psParams);
+
+        // Streaming PowerShell run. Captures all output streams into a StringBuilder and
+        // flushes the running text to the Job.Outcome column at most every 250ms — the
+        // Details page polls this row and renders it as a live console. A separate poll
+        // checks the job status (AsNoTracking, fresh from DB) so the controller's
+        // CancelRunningJob action can stop the runspace cooperatively.
+        private void RunStreaming(string name, Dictionary<string, string> psParams)
         {
-            // Executionpolicy Bypass - Thanks to @ducke
-            // 
-            InitialSessionState initial = InitialSessionState.CreateDefault();
+            var initial = InitialSessionState.CreateDefault();
 
-            // Replace PSAuthorizationManager with a null manager
-            // which ignores execution policy 
-            initial.AuthorizationManager = new AuthorizationManager("Microsoft.PowerShell");
-
-            //Create Runspace
-            using (var runspace = RunspaceFactory.CreateRunspace(initial))
+            // ExecutionPolicy is only honored on Windows; setter throws on non-Windows.
+            if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
             {
-                runspace.Open();
-
-                //Create Pipeline
-                using (Pipeline pipeline = runspace.CreatePipeline())
-                {
-
-                    //TODO: Testing - Please REMOVE!
-                    var command = new Command(_scriptIO.FileLocation(name));
-
-                    if (psParams != null)
-                    {
-                        //TODO: DoEs This Need Item Key or Will Params Run in Order?
-                        foreach (var item in psParams)
-                        {
-                            command.Parameters.Add(null, item.Value);
-                        }
-                    }
-
-                    pipeline.Commands.Add(command);
-
-                    //Pass in the Scripts text
-                    //pipeline.Commands.AddScript(scriptContents); //Previous Way - would allow for script storage in DB
-                    pipeline.Commands.Add("Out-String");
-
-                    //Invoke and Save Results
-                    var results = pipeline.Invoke();
-                    SaveResults(name, results);
-
-                    runspace.Close();
-                }
+                initial.ExecutionPolicy = Microsoft.PowerShell.ExecutionPolicy.Bypass;
             }
+
+            using var runspace = RunspaceFactory.CreateRunspace(initial);
+            runspace.Open();
+
+            using var ps = PowerShell.Create();
+            ps.Runspace = runspace;
+
+            var sb = new StringBuilder();
+            var sbLock = new object();
+            var lastFlush = DateTime.UtcNow.AddSeconds(-1);
+            var dirty = false;
+            int? jobIdCache = null;
+
+            int? FindJobId()
+            {
+                if (jobIdCache.HasValue) return jobIdCache;
+                var script = _scriptRepository.GetScripts().FirstOrDefault(s => s.Name == name);
+                if (script == null) return null;
+                var job = _scriptRepository.GetJobs()
+                    .Where(j => j.ScriptId == script.Id && (j.Status == Status.Started || j.Status == Status.Running))
+                    .OrderByDescending(j => j.Id)
+                    .FirstOrDefault();
+                if (job != null) jobIdCache = job.Id;
+                return jobIdCache;
+            }
+
+            void Flush(bool force = false)
+            {
+                string snapshot;
+                lock (sbLock)
+                {
+                    if (!dirty && !force) return;
+                    snapshot = sb.ToString();
+                    dirty = false;
+                }
+                var id = FindJobId();
+                if (!id.HasValue) return;
+                var live = _scriptRepository.GetJobById(id.Value);
+                if (live == null) return;
+                live.Outcome = snapshot;
+                _scriptRepository.UpdateJob(live);
+                try { _scriptRepository.Save(); } catch { /* transient EF/SQLite contention; final flush will retry */ }
+                lastFlush = DateTime.UtcNow;
+            }
+
+            void Append(string s)
+            {
+                if (string.IsNullOrEmpty(s)) return;
+                lock (sbLock)
+                {
+                    sb.AppendLine(s);
+                    dirty = true;
+                }
+                if ((DateTime.UtcNow - lastFlush).TotalMilliseconds >= 250) Flush();
+            }
+
+            // Subscribe to every PowerShell stream the operator might care about.
+            ps.Streams.Information.DataAdded += (_, e) =>
+                Append(ps.Streams.Information[e.Index]?.MessageData?.ToString());
+            ps.Streams.Verbose.DataAdded += (_, e) =>
+                Append("VERBOSE: " + ps.Streams.Verbose[e.Index]?.Message);
+            ps.Streams.Warning.DataAdded += (_, e) =>
+                Append("WARNING: " + ps.Streams.Warning[e.Index]?.Message);
+            ps.Streams.Error.DataAdded += (_, e) =>
+                Append("ERROR: " + (ps.Streams.Error[e.Index]?.Exception?.Message ?? ps.Streams.Error[e.Index]?.ToString()));
+
+            // Build the command chain. Inline script (so source-on-disk semantics
+            // match the previous behaviour) + positional params + Out-String to
+            // collapse PSObjects into readable text for the live console.
+            if (psParams != null && psParams.Count > 0)
+            {
+                var cmd = new Command(_scriptIO.FileLocation(name));
+                foreach (var item in psParams)
+                {
+                    cmd.Parameters.Add(null, item.Value);
+                }
+                ps.Commands.AddCommand(cmd);
+            }
+            else
+            {
+                ps.AddScript(_scriptIO.Read(name));
+            }
+            ps.AddCommand("Out-String");
+
+            var output = new PSDataCollection<PSObject>();
+            output.DataAdded += (_, e) => Append(output[e.Index]?.ToString());
+
+            var asyncResult = ps.BeginInvoke<PSObject, PSObject>(null, output);
+
+            // Cooperative cancel + first-flush. Tick every 500ms while the script runs;
+            // if the controller marks the job Cancelled, stop the runspace.
+            try
+            {
+                while (!asyncResult.AsyncWaitHandle.WaitOne(500))
+                {
+                    var id = FindJobId();
+                    if (id.HasValue && _scriptRepository.GetJobStatusFresh(id.Value) == Status.Cancelled)
+                    {
+                        ps.Stop();
+                        break;
+                    }
+                    if (dirty) Flush();
+                }
+                ps.EndInvoke(asyncResult);
+            }
+            catch (PipelineStoppedException) { /* expected when ps.Stop() is called from cancel */ }
+
+            Flush(force: true); // guaranteed final flush
+
+            // Preserve the existing post-run contract: SaveResults writes Script.LastOutput,
+            // which the UpdateJobStatusFilter then reads when marking the job Completed.
+            // We hand it the same text the live console already saw.
+            var script2 = _scriptRepository.GetScripts().FirstOrDefault(s => s.Name == name);
+            if (script2 != null)
+            {
+                script2.LastOutput = sb.ToString();
+                _scriptRepository.UpdateScript(script2);
+                try { _scriptRepository.Save(); } catch { /* swallow — flush already persisted Outcome */ }
+            }
+
+            runspace.Close();
         }
 
         public void RunOnSchedule(int id, string name, string recurring, Dictionary<string, string> psParams, DateTime schedule)
@@ -199,7 +263,8 @@ namespace LaunchPad.Services
                     Int32.Parse(BackgroundJob.Schedule<IJobServices>(x => x.Run(script.Name, schedule.PSparams),
                         new DateTime(schedule.Date.Ticks))),
                 Status = Status.Scheduled,
-                JobType = JobType.Scheduled
+                JobType = JobType.Scheduled,
+                Args = SerializeArgs(schedule.PSparams)
             };
 
             _scriptRepository.InsertJob(job);
