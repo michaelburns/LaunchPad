@@ -107,6 +107,21 @@ namespace LaunchPad.Services
         // (AsNoTracking, fresh from DB) so the controller's CancelRunningJob action can
         // stop the runspace cooperatively. Pre-feature outcomes (plain text) still
         // render correctly via the parse-fail fallback on the client.
+        // Default columns for well-known PowerShell types — matches what Out-String /
+        // Format-Table would show. When a script emits one of these types, the table
+        // segment uses these columns in this order instead of the alphabetical first 8
+        // of the full property surface. Operators see "the columns I expect."
+        private static readonly Dictionary<string, string[]> DefaultColumnsByType = new()
+        {
+            ["System.Diagnostics.Process"]      = new[] { "Id", "ProcessName", "CPU", "WorkingSet64", "Handles", "PriorityClass", "StartTime" },
+            ["System.IO.FileInfo"]              = new[] { "Mode", "LastWriteTime", "Length", "Name" },
+            ["System.IO.DirectoryInfo"]         = new[] { "Mode", "LastWriteTime", "Name" },
+            ["System.ServiceProcess.ServiceController"] = new[] { "Status", "Name", "DisplayName", "StartType" },
+            ["Microsoft.PowerShell.Commands.GenericMeasureInfo"] = new[] { "Count", "Average", "Sum", "Maximum", "Minimum", "Property" },
+            ["System.Management.Automation.PSDriveInfo"] = new[] { "Name", "Used", "Free", "Provider", "Root" },
+            ["System.Management.Automation.AliasInfo"]   = new[] { "CommandType", "Name", "Version", "Source" },
+        };
+
         private void RunStreaming(string name, Dictionary<string, string> psParams)
         {
             var initial = InitialSessionState.CreateDefault();
@@ -206,11 +221,27 @@ namespace LaunchPad.Services
                     return;
                 }
 
-                // Capture up to 32 properties — far enough to cover Get-Process and
-                // similar wide objects without exploding row size on pathological cases.
-                // The renderer caps the *visible* column count at 8 by default, with a
-                // "+N more" reveal chip for the rest.
-                var props = obj.Properties.Take(32).ToList();
+                // Pick the column set. For well-known PowerShell types, prefer the same
+                // columns Out-String / Format-Table would have shown by default — that's
+                // the muscle-memory shape an operator expects. For everything else, take
+                // up to 32 properties so wide objects keep their tail (renderer caps the
+                // visible column count at 8 with a "+N more cols" reveal chip).
+                List<PSPropertyInfo> props;
+                var typeName = obj.TypeNames?.FirstOrDefault();
+                if (typeName != null && DefaultColumnsByType.TryGetValue(typeName, out var preferred))
+                {
+                    props = preferred
+                        .Select(name => obj.Properties[name])
+                        .Where(p => p != null)
+                        .ToList();
+                    // Fall back gracefully if the type didn't actually have those props.
+                    if (props.Count == 0) props = obj.Properties.Take(32).ToList();
+                }
+                else
+                {
+                    props = obj.Properties.Take(32).ToList();
+                }
+
                 if (props.Count == 0)
                 {
                     AppendText(obj.ToString());

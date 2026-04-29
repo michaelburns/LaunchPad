@@ -560,6 +560,7 @@
     };
 
     const VISIBLE_COL_CAP = 8;
+    const VISIBLE_ROW_CAP = 200;
 
     const renderSegmentsHtml = (segments) => segments.map((seg) => {
       if (seg.t === 'text') {
@@ -572,37 +573,33 @@
         const rows = seg.rows || [];
         const totalCols = cols.length;
         const hasExtras = totalCols > VISIBLE_COL_CAP;
+        const totalRows = rows.length;
+        const cappedRows = totalRows > VISIBLE_ROW_CAP ? rows.slice(0, VISIBLE_ROW_CAP) : rows;
 
         const colsHtml = cols.map((c, i) => {
           const extra = (hasExtras && i >= VISIBLE_COL_CAP) ? ' data-extra="1"' : '';
           return `<th data-col-idx="${i}"${extra}>${escapeHtml(c)}</th>`;
         }).join('');
 
-        const rowsHtml = rows.map((row) => {
-          const tds = cols.map((_, i) => {
-            const v = row[i];
-            const cls = cellClass(v);
-            const text = escapeHtml(cellDisplay(v));
-            const title = (v !== null && v !== undefined) ? ` title="${escapeHtml(String(v))}"` : '';
-            const extra = (hasExtras && i >= VISIBLE_COL_CAP) ? ' data-extra="1"' : '';
-            return `<td class="${cls}"${title}${extra}>${text}</td>`;
-          }).join('');
-          return `<tr>${tds}</tr>`;
-        }).join('');
+        const rowsHtml = cappedRows.map((row) => renderTableRow(row, cols, hasExtras)).join('');
 
         const visibleCols = hasExtras ? VISIBLE_COL_CAP : totalCols;
-        const moreChip = hasExtras
+        const moreColsChip = hasExtras
           ? `<button type="button" class="seg-table__more" data-more aria-pressed="false">+${totalCols - VISIBLE_COL_CAP} more cols</button>`
           : '';
-        const filterInput = rows.length > 4
+        const moreRowsChip = totalRows > VISIBLE_ROW_CAP
+          ? `<button type="button" class="seg-table__more" data-more-rows="1" aria-pressed="false">show all ${totalRows} rows</button>`
+          : '';
+        const filterInput = totalRows > 4
           ? '<input type="search" class="seg-table__filter" placeholder="filter…" autocomplete="off" spellcheck="false" aria-label="Filter rows">'
           : '';
 
         return ''
-          + '<div class="seg-table" data-row-count="' + rows.length + '" data-visible-cap="' + visibleCols + '">'
+          + `<div class="seg-table" data-row-count="${totalRows}" data-visible-cap="${visibleCols}" data-visible-row-cap="${cappedRows.length}">`
           + '<div class="seg-table__head">'
-          +   `<span class="seg-table__count"><span class="visible-of-total" data-visible-count>${rows.length}</span> / ${rows.length} ${rows.length === 1 ? 'row' : 'rows'}</span>`
-          +   moreChip
+          +   `<span class="seg-table__count"><span class="visible-of-total" data-visible-count>${cappedRows.length}</span> / ${totalRows} ${totalRows === 1 ? 'row' : 'rows'}</span>`
+          +   moreColsChip
+          +   moreRowsChip
           +   filterInput
           + '</div>'
           + '<div class="seg-table__scroll"><table>'
@@ -613,6 +610,20 @@
       }
       return '';
     }).join('');
+
+    // Render a single tbody <tr> from a row + cols. Extracted so it can be reused
+    // by the incremental-append path during streaming.
+    const renderTableRow = (row, cols, hasExtras) => {
+      const tds = cols.map((_, i) => {
+        const v = row[i];
+        const cls = cellClass(v);
+        const text = escapeHtml(cellDisplay(v));
+        const title = (v !== null && v !== undefined) ? ` title="${escapeHtml(String(v))}"` : '';
+        const extra = (hasExtras && i >= VISIBLE_COL_CAP) ? ' data-extra="1"' : '';
+        return `<td class="${cls}"${title}${extra}>${text}</td>`;
+      }).join('');
+      return `<tr>${tds}</tr>`;
+    };
 
     // Flatten segments to plain text — used by the 'raw' toggle and as a fallback.
     const flattenSegments = (segments) => segments.map((seg) => {
@@ -638,9 +649,133 @@
       return '';
     }).join('\n\n');
 
+    // Last-rendered segment array, kept around so we can do incremental appends
+    // during streaming instead of full repaints (preserves operator's sort/filter).
+    let lastSegments = null;
+
+    // Quick structural-equality check for two segments. Coarse: text segments
+    // compare on .v; table segments compare on cols length + first row pointer.
+    // This only needs to detect "is this the same content I already rendered."
+    const segmentsExtensible = (oldSegs, newSegs) => {
+      if (!oldSegs || !newSegs) return null;
+      if (newSegs.length < oldSegs.length) return null;
+      // All segments before the last common one must be identical content.
+      for (let i = 0; i < oldSegs.length - 1; i++) {
+        const a = oldSegs[i];
+        const b = newSegs[i];
+        if (!a || !b || a.t !== b.t) return null;
+        if (a.t === 'text' && a.v !== b.v) return null;
+        if (a.t === 'table') {
+          if (!arraysShallowEqual(a.cols || [], b.cols || [])) return null;
+          if ((a.rows || []).length !== (b.rows || []).length) return null;
+        }
+      }
+      // The trailing segment of the old list — accept if (a) identical or (b) it's
+      // a table that's been extended with more rows in the new list.
+      const oldLast = oldSegs[oldSegs.length - 1];
+      const newAt   = newSegs[oldSegs.length - 1];
+      let extendedTable = null;
+      if (oldLast && newAt) {
+        if (oldLast.t === 'table' && newAt.t === 'table'
+            && arraysShallowEqual(oldLast.cols || [], newAt.cols || [])
+            && (newAt.rows || []).length >= (oldLast.rows || []).length) {
+          extendedTable = (newAt.rows || []).slice((oldLast.rows || []).length);
+        } else if (oldLast.t === 'text' && newAt.t === 'text') {
+          // Text continues if new value starts with old value.
+          if (typeof newAt.v === 'string' && typeof oldLast.v === 'string'
+              && newAt.v.startsWith(oldLast.v)) {
+            // No DOM mutation needed for text-prefix-equal case other than the
+            // extra characters; we'll just full-repaint that one text node.
+            extendedTable = null;
+          } else if (oldLast.v !== newAt.v) {
+            return null;
+          }
+        } else if (oldLast.t !== newAt.t) {
+          return null;
+        }
+      }
+      // Anything in newSegs beyond oldSegs.length is brand-new content to append.
+      const trailingNewSegments = newSegs.slice(oldSegs.length);
+      return { extendedTable, trailingNewSegments };
+    };
+
+    const arraysShallowEqual = (a, b) => {
+      if (a === b) return true;
+      if (!a || !b || a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+      return true;
+    };
+
+    // Apply an incremental update to the output container instead of replacing
+    // its innerHTML. Returns true on success, false to fall back to full repaint.
+    const applyIncrementalUpdate = (newSegs, mode) => {
+      if (mode !== 'structured') return false; // raw mode is a single <pre>; just full-repaint
+      const ext = segmentsExtensible(lastSegments, newSegs);
+      if (!ext) return false;
+
+      // Update the trailing text segment (if it grew character-wise).
+      const oldLast = lastSegments[lastSegments.length - 1];
+      const newAt = newSegs[lastSegments.length - 1];
+      if (oldLast && newAt && oldLast.t === 'text' && newAt.t === 'text' && oldLast.v !== newAt.v) {
+        const segNodes = outputEl.querySelectorAll('.seg-text, .seg-table');
+        const targetNode = segNodes[lastSegments.length - 1];
+        if (targetNode && targetNode.classList.contains('seg-text')) {
+          targetNode.textContent = newAt.v || '';
+        }
+      }
+
+      // Append new rows to the trailing table, if any.
+      if (ext.extendedTable && ext.extendedTable.length > 0) {
+        const segNodes = outputEl.querySelectorAll('.seg-text, .seg-table');
+        const tableNode = segNodes[lastSegments.length - 1];
+        if (tableNode && tableNode.classList.contains('seg-table')) {
+          const cols = newAt.cols || [];
+          const totalCols = cols.length;
+          const hasExtras = totalCols > VISIBLE_COL_CAP;
+          const tbody = tableNode.querySelector('tbody');
+          if (tbody) {
+            const rowHtml = ext.extendedTable.map((r) => renderTableRow(r, cols, hasExtras)).join('');
+            tbody.insertAdjacentHTML('beforeend', rowHtml);
+            // Update the row counter in the head.
+            const totalNow = (newAt.rows || []).length;
+            const counter = tableNode.querySelector('[data-visible-count]');
+            if (counter) counter.textContent = String(visibleRowCountFor(tbody));
+            const countLabel = tableNode.querySelector('.seg-table__count');
+            if (countLabel) {
+              const visible = visibleRowCountFor(tbody);
+              countLabel.innerHTML = `<span class="visible-of-total" data-visible-count>${visible}</span> / ${totalNow} ${totalNow === 1 ? 'row' : 'rows'}`;
+            }
+            // Re-apply the active filter so new rows respect it.
+            const filterInput = tableNode.querySelector('.seg-table__filter');
+            if (filterInput && filterInput.value) applyFilterToTable(tableNode);
+          }
+        }
+      }
+
+      // Append entirely new trailing segments (text or table) as fresh HTML.
+      if (ext.trailingNewSegments.length > 0) {
+        const html = renderSegmentsHtml(ext.trailingNewSegments);
+        outputEl.insertAdjacentHTML('beforeend', html);
+      }
+
+      lastSegments = newSegs;
+      return true;
+    };
+
+    const visibleRowCountFor = (tbody) =>
+      Array.from(tbody.querySelectorAll('tr')).filter((tr) => !tr.hasAttribute('hidden')).length;
+
     const renderInto = (raw, mode) => {
       const wasAtBottom = isAtBottom(outputEl);
       const segments = parseSegments(raw);
+
+      // Try incremental update first when streaming new structured content.
+      if (segments && segments.length > 0 && mode === 'structured' && lastSegments) {
+        if (applyIncrementalUpdate(segments, mode)) {
+          if (wasAtBottom) outputEl.scrollTop = outputEl.scrollHeight;
+          return;
+        }
+      }
 
       let html;
       const isPlaceholder = !raw || raw.length === 0
@@ -651,9 +786,11 @@
         html = mode === 'raw'
           ? `<pre class="seg-text">${escapeHtml(flattenSegments(segments))}</pre>`
           : renderSegmentsHtml(segments);
+        lastSegments = segments;
       } else {
         // Plain text or pre-feature outcome — render as a single text segment.
         html = `<pre class="seg-text">${escapeHtml(placeholder)}</pre>`;
+        lastSegments = null;
       }
       outputEl.classList.toggle('is-empty', isPlaceholder && !segments);
       outputEl.innerHTML = html;
@@ -782,19 +919,51 @@
           return;
         }
         // More cols toggle
-        const moreBtn = e.target.closest('.seg-table__more');
+        const moreBtn = e.target.closest('.seg-table__more[data-more]');
         if (moreBtn) {
           const segTable = moreBtn.closest('.seg-table');
           const showing = segTable.classList.toggle('all-cols');
           moreBtn.classList.toggle('is-active', showing);
           moreBtn.setAttribute('aria-pressed', showing ? 'true' : 'false');
-          if (showing) {
-            const total = segTable.querySelectorAll('thead th').length;
-            moreBtn.textContent = `hide ${total - VISIBLE_COL_CAP} cols`;
-          } else {
-            const total = segTable.querySelectorAll('thead th').length;
-            moreBtn.textContent = `+${total - VISIBLE_COL_CAP} more cols`;
-          }
+          const total = segTable.querySelectorAll('thead th').length;
+          moreBtn.textContent = showing
+            ? `hide ${total - VISIBLE_COL_CAP} cols`
+            : `+${total - VISIBLE_COL_CAP} more cols`;
+          return;
+        }
+
+        // Show-all-rows toggle
+        const moreRowsBtn = e.target.closest('.seg-table__more[data-more-rows]');
+        if (moreRowsBtn) {
+          const segTable = moreRowsBtn.closest('.seg-table');
+          const totalRows = parseInt(segTable.dataset.rowCount || '0', 10);
+          const renderedNow = segTable.querySelectorAll('tbody tr').length;
+          if (renderedNow >= totalRows) return; // already showing all
+
+          // Re-fetch the segment data from lastSegments — find the matching table
+          // by index relative to the rendered seg nodes.
+          const segNodes = Array.from(outputEl.querySelectorAll('.seg-text, .seg-table'));
+          const segIdx = segNodes.indexOf(segTable);
+          if (segIdx === -1 || !lastSegments || !lastSegments[segIdx]) return;
+          const seg = lastSegments[segIdx];
+          if (seg.t !== 'table') return;
+
+          const cols = seg.cols || [];
+          const rows = seg.rows || [];
+          const hasExtras = cols.length > VISIBLE_COL_CAP;
+          const tbody = segTable.querySelector('tbody');
+          const remaining = rows.slice(renderedNow);
+          tbody.insertAdjacentHTML('beforeend',
+            remaining.map((r) => renderTableRow(r, cols, hasExtras)).join(''));
+
+          moreRowsBtn.remove(); // one-shot
+          const counter = segTable.querySelector('.seg-table__count');
+          if (counter) counter.innerHTML =
+            `<span class="visible-of-total" data-visible-count>${rows.length}</span> / ${rows.length} ${rows.length === 1 ? 'row' : 'rows'}`;
+          // Re-apply filter so newly-rendered rows respect it.
+          const filterInput = segTable.querySelector('.seg-table__filter');
+          if (filterInput && filterInput.value) applyFilterToTable(segTable);
+          return;
         }
       });
 
