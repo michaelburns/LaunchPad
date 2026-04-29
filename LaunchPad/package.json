@@ -1,0 +1,19 @@
+{
+  "name": "launchpad-frontend",
+  "private": true,
+  "description": "Frontend bundling for the PowerShell editor (CodeMirror 6).",
+  "scripts": {
+    "build:editor": "esbuild wwwroot/js/ps-editor.src.js --bundle --format=esm --minify --target=es2020 --outfile=wwwroot/lib/codemirror/ps-editor.bundle.js"
+  },
+  "dependencies": {
+    "@codemirror/commands": "6.5.0",
+    "@codemirror/language": "6.10.1",
+    "@codemirror/legacy-modes": "6.4.0",
+    "@codemirror/view": "6.26.3",
+    "@lezer/highlight": "1.2.0",
+    "codemirror": "6.0.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.21.4"
+  }
+}
