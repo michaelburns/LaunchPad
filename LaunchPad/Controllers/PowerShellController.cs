@@ -28,14 +28,8 @@ namespace LaunchPad.Controllers
             _mapper = mapper;
         }
 
-        // GET: /PowerShell
-        public IActionResult Index()
-        {
-            var scripts = _scriptRepository.GetScripts();
-            var categoryIds = GetUserCategoryIds();
-            var authorizeScripts = scripts.Where(s => categoryIds.Contains(s.Category.Id));
-            return View(authorizeScripts);
-        }
+        // GET: /PowerShell — the script roster is now rendered by HomeController.Index.
+        public IActionResult Index() => RedirectToAction("Index", "Home");
 
         // GET: /PowerShell/Create
         [HttpGet]
@@ -43,8 +37,20 @@ namespace LaunchPad.Controllers
         public IActionResult Create()
         {
             ViewBag.Categories = new SelectList(_scriptRepository.GetCategories().ToList(), "Id", "Name");
-            return View();
+            return View(new PowerShellViewModel { Script = ScriptScaffold });
         }
+
+        // Starter template surfaced in the editor on Create. Comments above blank lines
+        // so first-time authors see the shape (param block, output) without ceremony.
+        private const string ScriptScaffold =
+            "# Runs on this LaunchPad host. Output is captured live via Out-String.\n" +
+            "# Uncomment and edit the param block to expose inputs in the launch UI.\n" +
+            "\n" +
+            "# param(\n" +
+            "#     [string]$Name = \"world\"\n" +
+            "# )\n" +
+            "\n" +
+            "Write-Output \"Hello from $($PSVersionTable.OS)\"\n";
 
         // POST: /PowerShell/Create
         [HttpPost, ValidateAntiForgeryToken]
@@ -53,8 +59,9 @@ namespace LaunchPad.Controllers
         {
             if (_scriptIO.ScriptExists(newScript.Name))
             {
-                ModelState.AddModelError("Name", "This Name Already Exists");
-                return View(); // TODO : Does newScript need to be passed to the view?
+                ModelState.AddModelError("Name", "A script with this name already exists. Pick a different name.");
+                ViewBag.Categories = new SelectList(_scriptRepository.GetCategories().ToList(), "Id", "Name", newScript.Category?.Id);
+                return View(newScript);
             }
 
             var script = _mapper.Map<PowerShellViewModel, Script>(newScript);
@@ -62,19 +69,16 @@ namespace LaunchPad.Controllers
 
             if (TryValidateModel(script))
             {
-                // Set the category
                 script.Category = _scriptRepository.GetCategories().FirstOrDefault(c => c.Id == newScript.Category.Id);
 
-                //Write File and Save Metadata
                 if (_scriptIO.Write(newScript.Name, newScript.Script))
                 {
-                    //Save PowerShell Script
                     _scriptRepository.InsertScript(script);
                     _scriptRepository.Save();
-                    //TODO: return RedirectToAction("Details", new { id = psScript.Id });
-                    return RedirectToAction("Index");
+                    return RedirectToAction("Details", new { id = script.Id });
                 }
             }
+            ViewBag.Categories = new SelectList(_scriptRepository.GetCategories().ToList(), "Id", "Name", newScript.Category?.Id);
             return View(newScript);
         }
 
@@ -110,13 +114,12 @@ namespace LaunchPad.Controllers
                 //Write File and Save Metadata
                 if (_scriptIO.Write(vmScript.Name, vmScript.Script))
                 {
-                    //Save PowerShell Script
                     _scriptRepository.UpdateScript(script);
                     _scriptRepository.Save();
-                    //TODO: return RedirectToAction("Details", new { id = psScript.Id });
-                    return RedirectToAction("Index");
+                    return RedirectToAction("Details", new { id = script.Id });
                 }
             }
+            ViewBag.Categories = new SelectList(_scriptRepository.GetCategories().ToList(), "Id", "Name", vmScript.Category?.Id);
             return View(vmScript);
         }
 
@@ -131,7 +134,185 @@ namespace LaunchPad.Controllers
             var scriptView = _mapper.Map<Script, PowerShellViewModel>(script);
             scriptView.Script = _scriptIO.Read(script.Name);
 
+            var jobs = _scriptRepository.GetJobs()
+                .Where(j => j.ScriptId == id)
+                .OrderByDescending(j => j.Id)
+                .ToList();
+
+            var running = jobs.FirstOrDefault(j => j.Status == Status.Running || j.Status == Status.Started);
+            var recent = jobs
+                .Where(j => j.JobType != JobType.ScheduledWithRecurring && j.JobType != JobType.Recurring)
+                .Take(10)
+                .ToList();
+            var recurring = jobs
+                .Where(j => j.JobType == JobType.Recurring && j.Status != Status.Cancelled)
+                .ToList();
+
+            ViewBag.ScriptParams    = _scriptIO.ScriptParams(script.Name);
+            ViewBag.RunningJob      = running;
+            ViewBag.RecentJobs      = recent;
+            ViewBag.RecurringJobs   = recurring;
+            ViewBag.RecurringOptions = JobServices.RecurringOptions();
+
             return View(scriptView);
+        }
+
+        // GET: /PowerShell/Pulse/1 — JSON poll for the Details page (running job, recent, recurring).
+        public IActionResult Pulse(int id)
+        {
+            var script = _scriptRepository.GetScriptById(id);
+            if (script == null) return NotFound();
+            if (script.Category != null && !UserHasAccessToCategory(script.Category.Id)) return Forbid();
+
+            var jobs = _scriptRepository.GetJobs()
+                .Where(j => j.ScriptId == id)
+                .OrderByDescending(j => j.Id)
+                .ToList();
+
+            var running = jobs.FirstOrDefault(j => j.Status == Status.Running || j.Status == Status.Started);
+            var recent = jobs
+                .Where(j => j.JobType != JobType.ScheduledWithRecurring && j.JobType != JobType.Recurring)
+                .Take(10)
+                .Select(j => new
+                {
+                    id       = j.Id,
+                    status   = j.Status.ToString(),
+                    started  = j.Date,
+                    userName = j.UserName,
+                    outcome  = j.Outcome
+                })
+                .ToList();
+            var recurringJobs = jobs
+                .Where(j => j.JobType == JobType.Recurring && j.Status != Status.Cancelled)
+                .Select(j => new
+                {
+                    id        = j.Id,
+                    started   = j.Date,
+                    userName  = j.UserName,
+                    cadence   = j.Outcome
+                })
+                .ToList();
+
+            System.Collections.Generic.Dictionary<string, string> runningArgs = null;
+            if (running != null && !string.IsNullOrEmpty(running.Args))
+            {
+                try { runningArgs = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, string>>(running.Args); }
+                catch { runningArgs = null; }
+            }
+
+            return Json(new
+            {
+                running = running == null ? null : new
+                {
+                    jobId    = running.Id,
+                    status   = running.Status.ToString(),
+                    started  = running.Date,
+                    userName = running.UserName,
+                    outcome  = running.Outcome ?? string.Empty,
+                    args     = runningArgs
+                },
+                recent,
+                recurring  = recurringJobs,
+                serverTime = DateTime.Now
+            });
+        }
+
+        // POST: /PowerShell/CancelRunningJob/1 — soft-cancel an in-flight script run. The
+        // running job's status flips to Cancelled, the streaming worker polls its own
+        // status and stops the runspace. Hangfire's BackgroundJob.Delete is also called
+        // so a stuck pipeline gets removed from the queue.
+        [HttpPost, ValidateAntiForgeryToken]
+        public IActionResult CancelRunningJob(int id)
+        {
+            var script = _scriptRepository.GetScriptById(id);
+            if (script == null) return RedirectToAction("Index", "Home");
+            if (script.Category != null && !UserHasAccessToCategory(script.Category.Id)) return RedirectToAction("Index", "Home");
+
+            var running = _scriptRepository.GetJobs()
+                .Where(j => j.ScriptId == id && (j.Status == Status.Running || j.Status == Status.Started))
+                .OrderByDescending(j => j.Id)
+                .FirstOrDefault();
+
+            if (running != null)
+            {
+                BackgroundJob.Delete(running.JobId.ToString());
+                running.Status = Status.Cancelled;
+                _scriptRepository.UpdateJob(running);
+                _scriptRepository.Save();
+            }
+
+            return RedirectToAction("Details", new { id });
+        }
+
+        // POST: /PowerShell/Retry/{jobId} — re-launch the script that produced this job,
+        // replaying any saved Args so the operator doesn't have to retype params.
+        [HttpPost, ValidateAntiForgeryToken]
+        public IActionResult Retry(int id)
+        {
+            var src = _scriptRepository.GetJobById(id);
+            if (src == null) return RedirectToAction("Index", "Home");
+            var script = _scriptRepository.GetScriptById(src.ScriptId);
+            if (script == null) return RedirectToAction("Index", "Home");
+            if (script.Category != null && !UserHasAccessToCategory(script.Category.Id)) return RedirectToAction("Index", "Home");
+
+            var jobServices = new JobServices(_scriptRepository, _scriptIO);
+            if (!string.IsNullOrEmpty(src.Args))
+            {
+                try
+                {
+                    var psParams = System.Text.Json.JsonSerializer
+                        .Deserialize<System.Collections.Generic.Dictionary<string, string>>(src.Args);
+                    if (psParams != null && psParams.Count > 0)
+                    {
+                        jobServices.LaunchScriptWithParams(User.Identity.Name,
+                            new PowerShellParam { Id = script.Id, PSparams = psParams });
+                        return RedirectToAction("Details", new { id = script.Id });
+                    }
+                }
+                catch { /* fall through to no-params launch */ }
+            }
+            jobServices.LaunchScript(User.Identity.Name, script);
+            return RedirectToAction("Details", new { id = script.Id });
+        }
+
+        // POST: /PowerShell/PreviewParams — debounced live parse for the author editor.
+        // Returns the param block as the launch UI would surface it, plus any AST parse
+        // errors. Used by ps-editor.src.js on Edit and Create.
+        [HttpPost]
+        [Authorize(Policy = "Author")]
+        [ValidateAntiForgeryToken]
+        public IActionResult PreviewParams([FromForm] string body)
+        {
+            if (string.IsNullOrEmpty(body))
+            {
+                return Json(new
+                {
+                    parameters = System.Array.Empty<object>(),
+                    errors     = System.Array.Empty<object>()
+                });
+            }
+
+            var ast = System.Management.Automation.Language.Parser
+                .ParseInput(body, out var tokens, out var parseErrors);
+
+            var parameters = ast?.ParamBlock?.Parameters
+                .Select(p => new
+                {
+                    key  = p.Name?.VariablePath?.UserPath ?? p.Name?.ToString() ?? string.Empty,
+                    type = p.StaticType?.Name ?? "Object"
+                })
+                .ToArray() ?? System.Array.Empty<object>();
+
+            var errors = parseErrors?
+                .Take(5)
+                .Select(e => new
+                {
+                    line    = e.Extent?.StartLineNumber ?? 0,
+                    message = e.Message
+                })
+                .ToArray() ?? System.Array.Empty<object>();
+
+            return Json(new { parameters, errors });
         }
 
         // GET: PowerShell/JobHistory/1
@@ -155,8 +336,9 @@ namespace LaunchPad.Controllers
             return PartialView(job);
         }
 
-        // Job ActionResults
-        // GET: PowerShell/Run/1
+        // POST: PowerShell/Run/1 — execution must be deliberate; GET is rejected so a stray
+        // browser back/refresh or copy-pasted URL can never start a script.
+        [HttpPost, ValidateAntiForgeryToken]
         public IActionResult Run(int id)
         {
             var jobServices = new JobServices(_scriptRepository, _scriptIO); // TODO: This can't be right.
@@ -189,7 +371,7 @@ namespace LaunchPad.Controllers
 
 
         // Post: PowerShell/RunWithParams/
-        [HttpPost]
+        [HttpPost, ValidateAntiForgeryToken]
         public IActionResult RunWithParams(PowerShellParam psParam)
         {
             var jobServices = new JobServices(_scriptRepository, _scriptIO);
@@ -220,7 +402,7 @@ namespace LaunchPad.Controllers
         }
 
         //POST: PowerShell/Schedule/1
-        [HttpPost]
+        [HttpPost, ValidateAntiForgeryToken]
         public IActionResult Schedule(PowerShellSchedule schedule)
         {
             var jobServices = new JobServices(_scriptRepository, _scriptIO);
@@ -284,7 +466,29 @@ namespace LaunchPad.Controllers
         public ActionResult DeleteConfirmed(int id)
         {
             var psMetadata = _scriptRepository.GetScriptById(id);
-            if (psMetadata.Category != null && !UserHasAccessToCategory(psMetadata.Category.Id)) { return RedirectToAction("Index"); }
+            if (psMetadata == null) return RedirectToAction("Index", "Home");
+            if (psMetadata.Category != null && !UserHasAccessToCategory(psMetadata.Category.Id)) { return RedirectToAction("Index", "Home"); }
+
+            // Cascade-cancel any non-terminal jobs for this script before removing it.
+            // BackgroundJob.Delete drops queued/scheduled work; RecurringJob.RemoveIfExists
+            // unschedules the cron entry. The Job rows flip to Cancelled so the audit log
+            // keeps a record of what was killed by the delete.
+            var jobServices = new JobServices(_scriptRepository, _scriptIO);
+            var liveJobs = _scriptRepository.GetJobs()
+                .Where(j => j.ScriptId == id
+                            && j.Status != Status.Completed
+                            && j.Status != Status.Failed
+                            && j.Status != Status.Cancelled)
+                .ToList();
+            foreach (var job in liveJobs)
+            {
+                try { BackgroundJob.Delete(job.JobId.ToString()); } catch { /* already gone */ }
+                if (job.JobType == JobType.Recurring || job.JobType == JobType.ScheduledWithRecurring)
+                {
+                    try { RecurringJob.RemoveIfExists(job.RecurringId.ToString()); } catch { /* already gone */ }
+                }
+                jobServices.UpdateJobStatus(job, Status.Cancelled);
+            }
 
             if (_scriptIO.Delete(psMetadata.Name))
             {
@@ -292,7 +496,7 @@ namespace LaunchPad.Controllers
                 _scriptRepository.Save();
             }
 
-            return RedirectToAction("Index");
+            return RedirectToAction("Index", "Home");
         }
 
 

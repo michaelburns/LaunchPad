@@ -1,185 +1,693 @@
+@using LaunchPad.Models
+@using LaunchPad.Services
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Mvc.Rendering
 @inject IAuthorizationService AuthorizationService
 @model LaunchPad.ViewModels.PowerShellViewModel
-
 @{
     ViewBag.Title = Model.Name;
+
+    var canAuthor    = (await AuthorizationService.AuthorizeAsync(User, "Author")).Succeeded;
+    var canLaunch    = (await AuthorizationService.AuthorizeAsync(User, "Launcher")).Succeeded;
+    var scriptParams = (System.Collections.Generic.Dictionary<string, string>)ViewBag.ScriptParams;
+    var runningJob   = (Job)ViewBag.RunningJob;
+    var recentJobs   = (System.Collections.Generic.List<Job>)ViewBag.RecentJobs ?? new System.Collections.Generic.List<Job>();
+    var recurringJobs = (System.Collections.Generic.List<Job>)ViewBag.RecurringJobs ?? new System.Collections.Generic.List<Job>();
+    var recurringOptions = (System.Collections.Generic.IEnumerable<SelectListItem>)ViewBag.RecurringOptions
+                            ?? System.Linq.Enumerable.Empty<SelectListItem>();
+    var lastJob      = recentJobs.FirstOrDefault();
+
+    string statusToken(Status s) => s switch
+    {
+        Status.Completed => "completed",
+        Status.Running   => "running",
+        Status.Started   => "running",
+        Status.Failed    => "failed",
+        Status.Scheduled => "scheduled",
+        Status.Recurring => "scheduled",
+        Status.Cancelled => "warning",
+        _                => "pending"
+    };
+    string statusLabel(Status s) => s.ToString().ToLowerInvariant();
+    string ago(DateTime d)
+    {
+        var t = DateTime.Now - d;
+        if (t.TotalSeconds < 60) return $"{(int)t.TotalSeconds}s ago";
+        if (t.TotalMinutes < 60) return $"{(int)t.TotalMinutes}m ago";
+        if (t.TotalHours   < 24) return $"{(int)t.TotalHours}h ago";
+        return $"{(int)t.TotalDays}d ago";
+    }
 }
 
-<h2></h2>
+<style>
+    .details {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--s-xl);
+    }
 
-<div class="form-horizontal">
-    <div class="row">
-        <h4>
-            @Html.DisplayFor(model => model.Name)
-            <span class="pull-right">
-               @Html.DisplayFor(model => model.Category.Name)
-            </span>            
-        </h4>
+    .details__head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: var(--s-md);
+        padding-bottom: var(--s-md);
+        border-bottom: 1px solid var(--rule);
+    }
+    .details__title { display: flex; align-items: baseline; gap: var(--s-md); flex-wrap: wrap; }
+    .details__title h1 { font-size: var(--t-h2); letter-spacing: -0.022em; }
+    .details__title .meta {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-3);
+        letter-spacing: 0;
+    }
+    .details__actions { display: flex; gap: var(--s-xs); align-items: center; }
+    .details__actions .ghost {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-2);
+        padding: 0.3em 0.6em;
+        border: 1px solid var(--rule);
+        background: transparent;
+        border-radius: 4px;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .details__actions .ghost:hover { color: var(--fg-0); border-color: var(--rule-strong); background: var(--bg-1); }
+    .details__actions .ghost.is-danger:hover { color: var(--fail); border-color: color-mix(in oklab, var(--fail) 45%, var(--rule-strong)); }
+
+    /* ---------- Running strip ------------------------------------- */
+    .running-strip {
+        display: flex;
+        align-items: center;
+        gap: var(--s-md);
+        padding: var(--s-sm) var(--s-md);
+        background: color-mix(in oklab, var(--accent) 10%, var(--bg-1));
+        border: 1px solid color-mix(in oklab, var(--accent) 50%, var(--rule-strong));
+        border-radius: 4px;
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-ui);
+        color: var(--fg-1);
+    }
+    .running-strip[hidden] { display: none; }
+    .running-strip .pulse {
+        width: 10px; height: 10px;
+        flex: 0 0 10px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 28%, transparent);
+        animation: pulse 1.4s ease-in-out infinite;
+    }
+    .running-strip__user { color: var(--fg-0); font-weight: 500; }
+    .running-strip__elapsed { color: var(--fg-2); margin-left: auto; }
+    .running-strip__cancel-form { display: inline-flex; }
+    .running-strip__cancel {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-2);
+        padding: 0.25em 0.55em;
+        border: 1px solid var(--rule);
+        background: transparent;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .running-strip__cancel:hover { color: var(--fail); border-color: color-mix(in oklab, var(--fail) 45%, var(--rule-strong)); }
+    .running-strip__cancel[data-armed="true"] {
+        color: var(--fail);
+        border-color: var(--fail);
+        background: color-mix(in oklab, var(--fail) 12%, transparent);
+        animation: arm-pulse 1.2s ease-in-out infinite;
+    }
+
+    /* Args echo strip — sits directly under running-strip when params were passed in. */
+    .running-args {
+        display: flex;
+        align-items: baseline;
+        gap: var(--s-md);
+        padding: var(--s-xs) var(--s-md);
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-2);
+        border-left: 1px solid var(--accent-soft);
+    }
+    .running-args[hidden] { display: none; }
+    .running-args__label {
+        font-size: var(--t-micro);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--fg-3);
+        flex: 0 0 auto;
+    }
+    .running-args__list { display: inline-flex; flex-wrap: wrap; gap: var(--s-sm); }
+    .running-args .arg { display: inline-flex; align-items: baseline; }
+    .running-args .arg__k { color: var(--fg-2); }
+    .running-args .arg__sep { color: var(--fg-3); padding: 0 0.15em; }
+    .running-args .arg__v { color: var(--fg-0); }
+
+    /* Schedule timezone caption */
+    .form-hint {
+        display: block;
+        margin-top: var(--s-2xs);
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-3);
+        letter-spacing: 0;
+    }
+
+    /* ---------- Ops grid (launch + schedule) --------------------- */
+    .ops-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr;
+        gap: var(--s-lg);
+    }
+    @@media (max-width: 880px) { .ops-grid { grid-template-columns: 1fr; } }
+
+    .panel-card {
+        background: var(--bg-1);
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+        padding: var(--s-md) var(--s-lg) var(--s-lg);
+    }
+    .panel-card__head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--s-sm);
+        margin-bottom: var(--s-md);
+        padding-bottom: var(--s-sm);
+        border-bottom: 1px solid var(--rule);
+    }
+    .panel-card__head h3 {
+        font-size: var(--t-meta);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--fg-2);
+        font-weight: 600;
+    }
+    .panel-card__meta {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-3);
+    }
+    .panel-card__body { color: var(--fg-2); margin: 0 0 var(--s-md); font-size: var(--t-meta); }
+    .panel-card__actions {
+        display: flex;
+        align-items: center;
+        gap: var(--s-md);
+        flex-wrap: wrap;
+        margin-top: var(--s-md);
+    }
+    .panel-card__actions .btn-primary { padding: 0.55em 1.1em; font-size: var(--t-ui); }
+    .panel-card__actions .btn-primary[data-armed="true"] {
+        background: var(--accent-deep);
+        border-color: var(--accent-deep);
+        color: var(--fg-0);
+        animation: arm-pulse 1.2s ease-in-out infinite;
+    }
+    @@keyframes arm-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); } 50% { box-shadow: 0 0 0 6px transparent; } }
+
+    .kbd-hint {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-3);
+    }
+    .kbd-hint kbd {
+        display: inline-block;
+        padding: 0.05em 0.35em;
+        font-size: 0.85em;
+        color: var(--fg-1);
+        background: var(--bg-2);
+        border: 1px solid var(--rule-strong);
+        border-radius: 3px;
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+    }
+
+    /* ---------- Params form ------------------------------------- */
+    .params-form { display: flex; flex-direction: column; gap: var(--s-sm); margin-bottom: var(--s-md); }
+    .params-form .form-group { margin-bottom: 0; }
+    .params-form .param-type {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: 0.85em;
+        color: var(--fg-3);
+        font-weight: 400;
+        text-transform: lowercase;
+        letter-spacing: 0;
+        margin-left: 0.4em;
+    }
+
+    /* ---------- Block sections (source / output / history) ----- */
+    .block { display: flex; flex-direction: column; }
+    .block__head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--s-sm);
+        padding: 0.5em 0 var(--s-xs);
+    }
+    .block__head h3 {
+        font-size: var(--t-meta);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--fg-2);
+        font-weight: 600;
+    }
+    .block__meta {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-3);
+    }
+
+    .source-block {
+        background: oklch(8% 0.012 260);
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+        padding: var(--s-md) var(--s-lg);
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono);
+        font-feature-settings: "ss01", "ss02";
+        font-size: var(--t-ui);
+        line-height: 1.7;
+        color: var(--fg-0);
+        white-space: pre;
+        overflow-x: auto;
+        max-height: 420px;
+        overflow-y: auto;
+        letter-spacing: 0;
+    }
+    .output-block {
+        background: oklch(8% 0.012 260);
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+        padding: var(--s-md) var(--s-lg);
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono);
+        font-size: var(--t-ui);
+        line-height: 1.6;
+        color: var(--fg-0);
+        white-space: pre-wrap;
+        overflow-x: auto;
+        min-height: 6em;
+        max-height: 480px;
+        overflow-y: auto;
+        letter-spacing: 0;
+    }
+    .output-block.is-empty { color: var(--fg-3); font-style: normal; }
+    .output-block.is-running { border-color: color-mix(in oklab, var(--accent) 50%, var(--rule-strong)); }
+    .output-cursor {
+        display: inline-block;
+        width: 0.5em; height: 1em;
+        background: var(--accent);
+        vertical-align: text-bottom;
+        animation: pulse 1.4s ease-in-out infinite;
+        margin-left: 0.2em;
+    }
+
+    /* ---------- History table ----------------------------------- */
+    .history { width: 100%; font-size: var(--t-ui); }
+    .history th {
+        text-align: left;
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        text-transform: lowercase;
+        letter-spacing: 0;
+        color: var(--fg-3);
+        font-weight: 500;
+        padding: var(--s-xs) var(--s-md) var(--s-xs) 0;
+        border-bottom: 1px solid var(--rule-strong);
+        white-space: nowrap;
+    }
+    .history td {
+        padding: 0.7em var(--s-md) 0.7em 0;
+        border-bottom: 1px solid var(--rule);
+        vertical-align: middle;
+        color: var(--fg-1);
+    }
+    .history tbody tr:last-child td { border-bottom-color: transparent; }
+    .history .col-user { font-family: var(--mono); font-variation-settings: var(--rec-mono-tight); color: var(--fg-2); font-size: var(--t-ui); }
+    .history .col-when { font-family: var(--mono); font-variation-settings: var(--rec-mono-tight); color: var(--fg-2); font-size: var(--t-ui); white-space: nowrap; }
+    .history .col-cadence { font-family: var(--mono); font-variation-settings: var(--rec-mono-tight); color: var(--fg-1); font-size: var(--t-ui); }
+    .history .col-act { text-align: right; white-space: nowrap; }
+    .history .col-act .toggle-output {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-3);
+        padding: 0.2em 0.5em;
+        border: 1px solid transparent;
+        background: transparent;
+        border-radius: 3px;
+        cursor: pointer;
+        text-decoration: none;
+    }
+    .history .col-act .toggle-output:hover { color: var(--fg-0); border-color: var(--rule); }
+    .history .col-act .retry-form { display: inline-flex; margin-left: 0.4em; }
+    .history .col-act .retry-btn {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-2);
+        padding: 0.2em 0.55em;
+        border: 1px solid var(--rule);
+        background: transparent;
+        border-radius: 3px;
+        cursor: pointer;
+    }
+    .history .col-act .retry-btn:hover { color: var(--accent); border-color: var(--accent); }
+    .history .col-act .retry-btn[data-armed="true"] {
+        color: oklch(15% 0.020 50);
+        background: var(--accent);
+        border-color: var(--accent);
+        animation: arm-pulse 1.2s ease-in-out infinite;
+    }
+    .history .history-output[hidden] { display: none; }
+    .history .history-output td { padding: 0 0 var(--s-md); border-bottom-color: transparent; }
+    .history .history-output pre {
+        background: oklch(8% 0.012 260);
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+        padding: var(--s-sm) var(--s-md);
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono);
+        font-size: var(--t-meta);
+        color: var(--fg-1);
+        white-space: pre-wrap;
+        max-height: 240px;
+        overflow-y: auto;
+    }
+    .history .empty { color: var(--fg-3); font-family: var(--mono); font-variation-settings: var(--rec-mono); padding: var(--s-md) 0; }
+
+    /* ---------- Cancel form (recurring rows) -------------------- */
+    .cancel-form { display: inline; }
+    .cancel-form button {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-2);
+        padding: 0.25em 0.55em;
+        border: 1px solid var(--rule);
+        background: transparent;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .cancel-form button:hover { color: var(--fail); border-color: color-mix(in oklab, var(--fail) 45%, var(--rule-strong)); }
+    .cancel-form button[data-armed="true"] {
+        color: var(--fail);
+        border-color: var(--fail);
+        background: color-mix(in oklab, var(--fail) 12%, transparent);
+        animation: arm-pulse 1.2s ease-in-out infinite;
+    }
+</style>
+
+<section class="details" data-details data-script-id="@Model.Id">
+
+    <header class="details__head">
+        <div class="details__title">
+            <h1>@Model.Name</h1>
+            <span class="meta">@Model.Category?.Name</span>
+        </div>
+        @if (canAuthor)
+        {
+            <div class="details__actions">
+                <a class="ghost" asp-action="Edit" asp-route-id="@Model.Id">edit</a>
+                <a class="ghost is-danger" asp-action="Delete" asp-route-id="@Model.Id">delete</a>
+            </div>
+        }
+    </header>
+
+    <div class="running-strip" data-running-strip @(runningJob != null ? "" : "hidden")>
+        <span class="pulse" aria-hidden="true"></span>
+        <span>started by <span class="running-strip__user" data-running-user>@(runningJob?.UserName ?? "")</span></span>
+        <span class="running-strip__elapsed" data-running-elapsed data-running-iso="@(runningJob?.Date.ToString("o") ?? "")">
+            @(runningJob != null ? $"elapsed {ago(runningJob.Date).Replace(" ago", "")}" : "")
+        </span>
+        <form class="running-strip__cancel-form" method="post" asp-action="CancelRunningJob" asp-controller="PowerShell" asp-route-id="@Model.Id" data-arm-form>
+            @Html.AntiForgeryToken()
+            <button type="submit" class="running-strip__cancel" data-arm-btn data-armed-label="confirm cancel">cancel run</button>
+        </form>
     </div>
-    @if ((await AuthorizationService.AuthorizeAsync(User, "Author")).Succeeded)
+
+    <!-- Params echoed back when the running job had any. Lives just under the running strip. -->
+    <div class="running-args" data-running-args @(runningJob != null && !string.IsNullOrEmpty(runningJob.Args) ? "" : "hidden")>
+        <span class="running-args__label">args</span>
+        <span class="running-args__list" data-running-args-list>
+            @if (runningJob != null && !string.IsNullOrEmpty(runningJob.Args))
+            {
+                System.Collections.Generic.Dictionary<string, string> argsDict = null;
+                try { argsDict = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, string>>(runningJob.Args); } catch { }
+                if (argsDict != null)
+                {
+                    foreach (var kv in argsDict)
+                    {
+                        <span class="arg"><span class="arg__k">@kv.Key</span><span class="arg__sep">=</span><span class="arg__v">@kv.Value</span></span>
+                    }
+                }
+            }
+        </span>
+    </div>
+
+    @if (canLaunch)
     {
-        <div class="pull-right">
-            @Html.ActionLink("Edit", "Edit", new { id = Model.Id }) |
-            @Html.ActionLink("Delete", "Delete", new { id = Model.Id })
+        <div class="ops-grid">
+            <article class="panel-card">
+                <header class="panel-card__head">
+                    <h3>launch</h3>
+                    <span class="panel-card__meta">runs immediately on this host</span>
+                </header>
+
+                @if (scriptParams != null && scriptParams.Count > 0)
+                {
+                    <form method="post" asp-action="RunWithParams" asp-controller="PowerShell" data-launch-form data-arm-form>
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="Id" value="@Model.Id" />
+                        <div class="params-form">
+                            @{ int i = 0; }
+                            @foreach (var p in scriptParams)
+                            {
+                                <div class="form-group">
+                                    <label for="PSparams_@i">@p.Key<span class="param-type">@p.Value</span></label>
+                                    <input type="hidden" name="PSparams[@i].Key" value="@p.Key" />
+                                    <input id="PSparams_@i" name="PSparams[@i].Value" type="text" required autocomplete="off" spellcheck="false" />
+                                </div>
+                                i++;
+                            }
+                        </div>
+                        <div class="panel-card__actions">
+                            <button type="submit" class="btn btn-primary" data-launch-btn data-arm-btn data-armed-label="confirm launch ›">launch ›</button>
+                            <span class="kbd-hint">press <kbd>r</kbd> twice to confirm</span>
+                        </div>
+                    </form>
+                }
+                else
+                {
+                    <form method="post" asp-action="Run" asp-controller="PowerShell" asp-route-id="@Model.Id" data-launch-form data-arm-form>
+                        @Html.AntiForgeryToken()
+                        <p class="panel-card__body">No parameters required. Launch executes the script as-is.</p>
+                        <div class="panel-card__actions">
+                            <button type="submit" class="btn btn-primary" data-launch-btn data-arm-btn data-armed-label="confirm launch ›">launch ›</button>
+                            <span class="kbd-hint">press <kbd>r</kbd> twice to confirm</span>
+                        </div>
+                    </form>
+                }
+            </article>
+
+            <article class="panel-card">
+                <header class="panel-card__head">
+                    <h3>schedule</h3>
+                    <span class="panel-card__meta">queue for later, or recur</span>
+                </header>
+                <form method="post" asp-action="Schedule" asp-controller="PowerShell">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="Id" value="@Model.Id" />
+
+                    @if (scriptParams != null && scriptParams.Count > 0)
+                    {
+                        <div class="params-form">
+                            @{ int j = 0; }
+                            @foreach (var p in scriptParams)
+                            {
+                                if (p.Value == "String")
+                                {
+                                    <div class="form-group">
+                                        <label for="SchParams_@j">@p.Key<span class="param-type">@p.Value</span></label>
+                                        <input type="hidden" name="PSparams[@j].Key" value="@p.Key" />
+                                        <input id="SchParams_@j" name="PSparams[@j].Value" type="text" autocomplete="off" />
+                                    </div>
+                                }
+                                j++;
+                            }
+                        </div>
+                    }
+
+                    <div class="form-group">
+                        <label for="schedDate">when</label>
+                        <input id="schedDate" name="Date" type="datetime-local" required />
+                        @{
+                            var tz = TimeZoneInfo.Local;
+                            var offsetHours = (int)tz.GetUtcOffset(DateTime.Now).TotalHours;
+                            var sign = offsetHours >= 0 ? "+" : "";
+                            var abbr = tz.IsDaylightSavingTime(DateTime.Now) ? tz.DaylightName : tz.StandardName;
+                        }
+                        <span class="form-hint">server time · UTC@(sign)@(offsetHours) · @abbr</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="schedRecur">recurring</label>
+                        <select id="schedRecur" name="SelectedRecurring" data-lp-select>
+                            <option value="">never</option>
+                            @foreach (var opt in recurringOptions)
+                            {
+                                <option value="@opt.Value">@opt.Text</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="panel-card__actions">
+                        <button type="submit" class="btn">schedule ›</button>
+                    </div>
+                </form>
+            </article>
         </div>
     }
 
+    <section class="block">
+        <header class="block__head">
+            <h3>source</h3>
+            <span class="block__meta">@(Model.Name + ".ps1") · read-only</span>
+        </header>
+        <pre class="source-block"><code>@Model.Script</code></pre>
+    </section>
 
-    <hr />
-
-
-    <div class="form-group">
-        @*@Html.LabelFor(model => model.Script, htmlAttributes: new { @class = "control-label col-md-2" })*@
-        <div class="col-md-10 col-md-push-1">
-            <div id="editor" style="height:250px;display:none;">@Model.Script</div>
-        </div>
-    </div>
-
-    <div class="form-group">
-        <div class="col-md-10 col-md-push-1">
-
-            @if ((await AuthorizationService.AuthorizeAsync(User, "Launcher")).Succeeded)
-            {
-                <form id="scriptForm" asp-action="Run" method="post" asp-route-id="@Model.Id">
-                    <a tabindex="0" id="LaunchScript" script-id="@Model.Id" action="launch" class="btn btn-primary">Launch Script</a>
-                    <a tabindex="0" job-id="@Model.Id" action="schedule" class="jobModalButton btn btn-warning">Schedule</a>
-                </form>
-            }
-
-            @*@using (Html.BeginForm("Run", "PowerShell", new { id = Model.Id }, FormMethod.Post, new { id = "scriptForm" }))
+    <section class="block">
+        <header class="block__head">
+            <h3>output</h3>
+            <span class="block__meta" data-output-meta>
+                @if (runningJob != null)
                 {
-
-                }*@
-
-        </div>
-    </div>
-</div>
-
-
-
-<p>
-    @Html.ActionLink("Back to List", "Index")
-</p>
-
-<hr />
-
-<ul class="nav nav-tabs">
-    <li class='active'>
-        <a href="#history" data-toggle="tab">Job History</a>
-    </li>
-    <li><a href="#recurring" data-toggle="tab">Recurring Jobs</a></li>
-</ul>
-
-<div class="tab-content">
-    <div class="tab-pane active" id="history">
-        <div id="JobHistory">
-        </div>
-    </div>
-    <div class="tab-pane" id="recurring">
-        @*$('#recurring').load("/PowerShell/RecurringJobs/" + @Model.Id);*@
-        @await Component.InvokeAsync("Partials", Model.Id)
-    </div>
-</div>
-
-
-
-
-
-<!-- Modal -->
-<div class="modal fade" id="jobDetailsModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
-    <div class="modal-dialog" role="document" style="width:900px;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                <h4 class="modal-title" id="myModalLabel">Job Details</h4>
-            </div>
-            <div id="jobDetailsModalBody" class="modal-body">
-                ...
-            </div>
-
-        </div>
-    </div>
-</div>
-
-
-
-@section Scripts {
-    <script src="~/lib/ace-builds/src-min/ace.js"></script>
-
-
-    <script>
-        $(document).ready(function() {
-            getJobHistory();
-            $("#editor").show();
-            $("[data-toggle=popover]").popover({ trigger: "hover", container: 'body' });
-        });
-
-        ace.config.set("basePath", "/Scripts/editor/src");
-        var editor = ace.edit("editor");
-        editor.setOptions({
-            readOnly: true
-        });
-        editor.setTheme("ace/theme/sqlserver"); //chrome|clouds|sqlserver
-        editor.getSession().setMode("ace/mode/powershell");
-
-
-        //Modal Goodies
-        $('.jobModalButton').click(function() {
-            var jobId = $(this).attr("job-id");
-            var action = $(this).attr("action");
-            $("#jobDetailsModalBody").load("/PowerShell/" + action + "/" + jobId, function(response, status) {
-                if (status === "success") {
-                    $('#jobDetailsModal').modal('toggle');
+                    <text>running · output appears when the run completes</text>
                 }
-            });
-        });
-
-        //Used for Reload Click Trigger for Job History Refresh
-        $('#JobHistory').on('click', '.jobModalButton', function() {
-            var jobId = $(this).attr("job-id");
-            var action = $(this).attr("action");
-            $("#jobDetailsModalBody").load("/PowerShell/" + action + "/" + jobId, function(response, status) {
-                if (status === "success") {
-                    $('#jobDetailsModal').modal('toggle');
+                else if (lastJob != null)
+                {
+                    <text>last run · @ago(lastJob.Date) · @statusLabel(lastJob.Status)</text>
                 }
-            });
+                else
+                {
+                    <text>no runs yet</text>
+                }
+            </span>
+        </header>
+        @{
+            var initialOutput = runningJob != null
+                ? string.Empty
+                : (lastJob?.Outcome ?? "");
+            var emptyClass = string.IsNullOrEmpty(initialOutput) ? " is-empty" : "";
+            var runningClass = runningJob != null ? " is-running" : "";
+        }
+        <pre class="output-block@(emptyClass)@(runningClass)" data-output>@(string.IsNullOrEmpty(initialOutput) ? (runningJob != null ? "$ waiting for output…" : "$ no output yet") : initialOutput)</pre>
+    </section>
 
-        });
-
-        //Refresh JobHistory
-        function getJobHistory() {
-            $('#JobHistory').load("../JobHistory/" + @Model.Id);
-        };
-        setInterval(function() {
-            getJobHistory();
-        }, 5000);
-
-        //Launch - Check for Params in Script
-        $('#LaunchScript').click(function() {
-            $.ajax({
-                type: 'GET',
-                url: '/Powershell/GetParams/@Model.Id',
-                dataType: 'json',
-                success: function(jsonData) {
-                    var data = JSON.stringify(jsonData);
-                    if (data !== '{"Null":"Null"}') {
-                        $("#jobDetailsModalBody").load('/Powershell/RunWithParams/@Model.Id', function(response, status) {
-                            if (status === "success") {
-                                $('#jobDetailsModal').modal('toggle');
-                            }
-                        });
-                    } else {
-                        $('#scriptForm').submit();
+    <section class="block">
+        <header class="block__head">
+            <h3>history</h3>
+            <span class="block__meta" data-history-meta>
+                <span data-numeric>@recentJobs.Count</span> recent runs
+            </span>
+        </header>
+        <table class="history" data-history>
+            <thead>
+                <tr>
+                    <th>user</th>
+                    <th>started</th>
+                    <th>status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody data-history-body>
+                @if (!recentJobs.Any())
+                {
+                    <tr><td colspan="4"><div class="empty">$ no runs yet</div></td></tr>
+                }
+                else
+                {
+                    foreach (var jh in recentJobs)
+                    {
+                        <tr data-job-id="@jh.Id">
+                            <td class="col-user">@jh.UserName</td>
+                            <td class="col-when" data-when-iso="@jh.Date.ToString("o")">@ago(jh.Date)</td>
+                            <td><span class="status" data-state="@statusToken(jh.Status)">@statusLabel(jh.Status)</span></td>
+                            <td class="col-act">
+                                @if (!string.IsNullOrEmpty(jh.Outcome))
+                                {
+                                    <button type="button" class="toggle-output" data-toggle-output="@jh.Id">view ›</button>
+                                }
+                                @if (canLaunch && (jh.Status == Status.Failed || jh.Status == Status.Completed || jh.Status == Status.Cancelled))
+                                {
+                                    <form class="retry-form" method="post" asp-action="Retry" asp-controller="PowerShell" asp-route-id="@jh.Id" data-arm-form>
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="retry-btn" data-arm-btn data-armed-label="confirm retry">retry ›</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                        if (!string.IsNullOrEmpty(jh.Outcome))
+                        {
+                            <tr class="history-output" data-output-row="@jh.Id" hidden>
+                                <td colspan="4">
+                                    <pre>@jh.Outcome</pre>
+                                </td>
+                            </tr>
+                        }
                     }
-                },
-                error: function() {
-                    alert("Error loading data. Is the Server Up?");
                 }
-            });
+            </tbody>
+        </table>
+    </section>
 
-        });
+    @if (recurringJobs.Any())
+    {
+        <section class="block">
+            <header class="block__head">
+                <h3>recurring</h3>
+                <span class="block__meta">jobs that repeat on a schedule</span>
+            </header>
+            <table class="history">
+                <thead>
+                    <tr>
+                        <th>user</th>
+                        <th>scheduled</th>
+                        <th>cadence</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in recurringJobs)
+                    {
+                        <tr>
+                            <td class="col-user">@r.UserName</td>
+                            <td class="col-when">@r.Date.ToString("yyyy-MM-dd HH:mm")</td>
+                            <td class="col-cadence">@r.Outcome</td>
+                            <td class="col-act">
+                                <form class="cancel-form" method="post" asp-action="CancelJob" asp-controller="PowerShell" data-arm-form>
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="Id" value="@r.Id" />
+                                    <button type="submit" data-arm-btn data-armed-label="confirm cancel">cancel</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </section>
+    }
 
-
-    </script>
-}
+</section>

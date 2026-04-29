@@ -1,22 +1,130 @@
-﻿@model LaunchPad.Models.Script
-
+@model LaunchPad.Models.Script
 @{
-    ViewBag.Title = "Delete";
+    ViewBag.Title = $"Delete · {Model.Name}";
 }
 
-<h2>Delete</h2>
+<style>
+    .confirm { display: grid; grid-template-columns: 1fr; gap: var(--s-xl); max-width: 720px; }
 
-<h3>Are you sure you want to delete @Html.DisplayFor(model => model.Name)?</h3>
-<div>
-    <hr />
-
-    @using (Html.BeginForm())
-    {
-        @Html.AntiForgeryToken()
-
-        <div class="form-actions no-color">
-            <input type="submit" value="Delete" class="btn btn-default" /> |
-            @Html.ActionLink("Back to List", "Index")
-        </div>
+    .confirm__head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: var(--s-md);
+        padding-bottom: var(--s-md);
+        border-bottom: 1px solid var(--rule);
     }
-</div>
+    .confirm__head h1 { font-size: var(--t-h2); letter-spacing: -0.022em; }
+    .confirm__head .meta {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-3);
+    }
+    .confirm__title { display: flex; align-items: baseline; gap: var(--s-md); flex-wrap: wrap; }
+
+    .confirm__panel {
+        background: var(--bg-1);
+        border: 1px solid color-mix(in oklab, var(--fail) 35%, var(--rule-strong));
+        border-left: 3px solid var(--fail);
+        border-radius: 4px;
+        padding: var(--s-lg);
+    }
+    .confirm__panel h2 {
+        font-size: var(--t-lead);
+        margin-bottom: var(--s-sm);
+        color: var(--fail);
+        letter-spacing: -0.018em;
+    }
+    .confirm__panel p {
+        color: var(--fg-1);
+        margin-bottom: var(--s-md);
+        max-width: 64ch;
+    }
+    .confirm__panel p:last-of-type { margin-bottom: var(--s-lg); }
+    .confirm__panel .what {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        color: var(--fg-0);
+        padding: 0.1em 0.4em;
+        background: var(--bg-2);
+        border: 1px solid var(--rule);
+        border-radius: 3px;
+        letter-spacing: 0;
+    }
+
+    .confirm__actions {
+        display: flex;
+        gap: var(--s-md);
+        align-items: center;
+    }
+    .btn-delete {
+        font-family: var(--sans);
+        font-size: var(--t-ui);
+        font-weight: 500;
+        background: var(--bg-2);
+        color: var(--fail);
+        border: 1px solid color-mix(in oklab, var(--fail) 45%, var(--rule-strong));
+        padding: 0.5em 1em;
+        border-radius: 4px;
+        cursor: pointer;
+        letter-spacing: -0.005em;
+    }
+    .btn-delete:hover {
+        background: color-mix(in oklab, var(--fail) 12%, var(--bg-2));
+        border-color: var(--fail);
+        color: var(--fg-0);
+    }
+    .btn-delete[data-armed="true"] {
+        background: var(--fail);
+        border-color: var(--fail);
+        color: var(--fg-0);
+        animation: arm-pulse-delete 1.2s ease-in-out infinite;
+    }
+    @@keyframes arm-pulse-delete {
+        0%, 100% { box-shadow: 0 0 0 0 transparent; }
+        50%      { box-shadow: 0 0 0 6px color-mix(in oklab, var(--fail) 22%, transparent); }
+    }
+
+    .ghost {
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-meta);
+        color: var(--fg-2);
+        padding: 0.4em 0.8em;
+        border: 1px solid var(--rule);
+        background: transparent;
+        border-radius: 4px;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .ghost:hover { color: var(--fg-0); border-color: var(--rule-strong); background: var(--bg-1); }
+</style>
+
+<section class="confirm">
+    <header class="confirm__head">
+        <div class="confirm__title">
+            <h1>delete script</h1>
+            <span class="meta">@(Model.Name + ".ps1")</span>
+        </div>
+        <a class="ghost" asp-action="Details" asp-route-id="@Model.Id">cancel</a>
+    </header>
+
+    <div class="confirm__panel">
+        <h2>this can't be undone</h2>
+        <p>
+            You're about to delete <span class="what">@(Model.Name + ".ps1")</span> from this LaunchPad host.
+            The .ps1 file on disk and the script's metadata row will be removed. Any scheduled or recurring
+            jobs for this script are cancelled as part of the delete. Past job history rows remain in the
+            audit log; the script itself will no longer be runnable.
+        </p>
+
+        <form asp-action="Delete" asp-route-id="@Model.Id" method="post" data-arm-form>
+            @Html.AntiForgeryToken()
+            <div class="confirm__actions">
+                <button type="submit" class="btn-delete" data-arm-btn data-armed-label="confirm delete">delete script</button>
+                <a class="ghost" asp-action="Details" asp-route-id="@Model.Id">cancel</a>
+            </div>
+        </form>
+    </div>
+</section>
