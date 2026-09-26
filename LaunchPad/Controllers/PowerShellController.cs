@@ -93,7 +93,7 @@ namespace LaunchPad.Controllers
             var scriptView = _mapper.Map<Script, PowerShellViewModel>(script);
             scriptView.Script = _scriptIO.Read(script.Name);
 
-            ViewBag.Categories = new SelectList(_scriptRepository.GetCategories().ToList(), "Id", "Name");
+            ViewBag.Categories = new SelectList(_scriptRepository.GetCategories().ToList(), "Id", "Name", script.Category?.Id);
 
             return View(scriptView);
         }
@@ -148,6 +148,12 @@ namespace LaunchPad.Controllers
                 .Where(j => j.JobType == JobType.Recurring && j.Status != Status.Cancelled)
                 .ToList();
 
+            var finished = jobs.Where(j => j.Status == Status.Completed || j.Status == Status.Failed).Take(50).ToList();
+            ViewBag.TotalRuns       = jobs.Count(j => j.Status != Status.Recurring && j.Status != Status.Scheduled);
+            ViewBag.SuccessOk       = finished.Count(j => j.Status == Status.Completed);
+            ViewBag.SuccessTotal    = finished.Count;
+            ViewBag.RunTicks        = jobs.Where(j => j.Status != Status.Recurring && j.Status != Status.Scheduled)
+                                          .Take(32).Select(j => j.Status).Reverse().ToList();
             ViewBag.ScriptParams    = _scriptIO.ScriptParams(script.Name);
             ViewBag.RunningJob      = running;
             ViewBag.RecentJobs      = recent;

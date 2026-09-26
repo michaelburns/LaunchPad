@@ -22,8 +22,8 @@
     .author__row { display: grid; grid-template-columns: 180px 1fr; gap: var(--s-md); align-items: baseline; }
     .author__row label {
         font-size: var(--t-meta);
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
+        text-transform: none;
+        letter-spacing: 0;
         color: var(--fg-2);
         margin: 0;
     }
@@ -54,7 +54,7 @@
         padding: var(--s-sm) var(--s-md);
         background: color-mix(in oklab, var(--fail) 8%, var(--bg-1));
         border: 1px solid color-mix(in oklab, var(--fail) 45%, var(--rule-strong));
-        border-radius: 4px;
+        border-radius: var(--r-lg);
         margin-bottom: var(--s-md);
     }
 
@@ -66,10 +66,10 @@
 <section class="author">
     <header class="author__head">
         <div class="author__title">
-            <h1>new category</h1>
+            <h1>New category</h1>
             <span class="meta">group scripts so admins can grant access to them</span>
         </div>
-        <a class="ghost" asp-action="CategoryList">cancel</a>
+        <a class="ghost" asp-action="CategoryList">Cancel</a>
     </header>
 
     <form asp-action="CategoryCreate" method="post" class="author__form" data-author-form>
@@ -86,8 +86,8 @@
         </div>
 
         <div class="author__actions">
-            <button type="submit" class="btn btn-primary">create category</button>
-            <a class="ghost" asp-action="CategoryList">cancel</a>
+            <button type="submit" class="btn btn-primary"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Create category</button>
+            <a class="ghost" asp-action="CategoryList">Cancel</a>
         </div>
     </form>
 </section>

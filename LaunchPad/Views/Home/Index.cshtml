@@ -9,6 +9,16 @@
     int failed24h    = ViewBag.FailedCount24h ?? 0;
     int completed24h = ViewBag.CompletedCount24h ?? 0;
     var canAuthor    = (await AuthorizationService.AuthorizeAsync(User, "Author")).Succeeded;
+    var activity     = (System.Collections.Generic.List<LaunchPad.Controllers.ActivityDay>)ViewBag.Activity ?? new();
+    var runHistory   = (System.Collections.Generic.Dictionary<int, System.Collections.Generic.List<Status>>)ViewBag.RunHistory ?? new();
+    var rates        = (System.Collections.Generic.Dictionary<int, (int ok, int total)>)ViewBag.SuccessRates ?? new();
+    Job nextRecurring = ViewBag.NextRecurring;
+    var lastRunDates = (System.Collections.Generic.Dictionary<int, DateTime>)ViewBag.LastRunDates ?? new();
+    var categories   = (scripts ?? new()).Select(x => x.Category?.Name ?? "uncategorised").Distinct().OrderBy(x => x).ToList();
+    var total24h     = completed24h + failed24h;
+    var rate24h      = total24h == 0 ? (double?)null : (double)completed24h / total24h;
+    var peak         = Math.Max(1, activity.Count == 0 ? 1 : activity.Max(a => a.Total));
+    var total14d     = activity.Sum(a => a.Total);
 
     string statusToken(Status s) => s switch {
         Status.Completed => "completed",
@@ -74,435 +84,719 @@
 <style>
     .home {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 280px;
+        grid-template-columns: minmax(0, 1fr) 300px;
         gap: var(--s-xl);
         align-items: start;
     }
 
-    /* Script roster — the page's main content. Class name is internal; the user-facing
-       term is "scripts" everywhere in the chrome. */
-    .roster {
-        width: 100%;
-        font-size: var(--t-body);
+    /* ---------- Deck: live state + 14-day activity ---------- */
+    .deck {
+        display: grid;
+        grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.6fr);
+        margin-bottom: var(--s-xl);
+        overflow: hidden;
     }
-    .roster th {
-        text-align: left;
+    .deck__state {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s-md);
+        padding: var(--s-lg);
+        border-right: 1px solid var(--rule);
+        justify-content: space-between;
+    }
+    .deck__now {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    .deck__now-icon {
+        display: grid;
+        place-items: center;
+        width: 36px; height: 36px;
+        border-radius: 10px;
+        background: color-mix(in oklab, var(--ok) 14%, var(--bg-2));
+        color: var(--ok);
+        box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ok) 25%, transparent);
+        flex: 0 0 auto;
+    }
+    .deck__now-icon .i { width: 18px; height: 18px; }
+    .deck__now[data-state="running"] .deck__now-icon {
+        background: color-mix(in oklab, var(--accent) 16%, var(--bg-2));
+        color: var(--accent);
+        box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent);
+    }
+    .deck__now[data-state="failing"] .deck__now-icon {
+        background: color-mix(in oklab, var(--fail) 14%, var(--bg-2));
+        color: var(--fail);
+        box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--fail) 30%, transparent);
+    }
+    .deck__now-title { font-size: var(--t-lead); font-weight: 600; letter-spacing: -0.015em; line-height: 1.25; }
+    .deck__now-title a { border: none; }
+    .deck__now-sub { font-size: var(--t-meta); color: var(--fg-2); }
+    .deck__facts {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--s-md);
+        margin: 0;
+        padding-top: var(--s-md);
+        border-top: 1px solid var(--rule);
+    }
+    .deck__facts dt { font-size: var(--t-micro); color: var(--fg-3); margin-bottom: 0.2rem; }
+    .deck__facts dd {
+        margin: 0;
         font-family: var(--mono);
         font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-lead);
+        color: var(--fg-0);
+        letter-spacing: -0.01em;
+    }
+    .deck__facts dd.is-fail { color: color-mix(in oklab, var(--fail) 60%, var(--fg-0)); }
+    .deck__facts dd a { border: none; color: inherit; }
+    .deck__facts dd a:hover { color: var(--accent); }
+    .deck__next {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
         font-size: var(--t-meta);
-        text-transform: lowercase;
-        letter-spacing: 0;
-        color: var(--fg-3);
-        font-weight: 500;
-        padding: var(--s-sm) var(--s-md) var(--s-sm) 0;
-        border-bottom: 1px solid var(--rule-strong);
-        white-space: nowrap;
+        color: var(--fg-2);
+        min-width: 0;
     }
-    /* Sortable column headers: chevron indicator on the active column, hover lifts colour. */
-    .roster th[data-sort-key] {
-        cursor: pointer;
-        user-select: none;
+    .deck__next .i { color: var(--info); }
+    .deck__next strong { color: var(--fg-1); font-weight: 550; }
+    .deck__next span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .deck__chart {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s-sm);
+        padding: var(--s-lg);
+        min-width: 0;
+        margin: 0;
+    }
+    .deck__chart-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--s-md);
+    }
+    .deck__chart-head h2 { font-size: var(--t-ui); font-weight: 600; color: var(--fg-1); letter-spacing: 0; }
+    .deck__legend { display: flex; gap: var(--s-md); font-size: var(--t-micro); color: var(--fg-2); }
+    .deck__legend span { display: inline-flex; align-items: center; gap: 0.4em; }
+    .deck__legend i { width: 8px; height: 8px; border-radius: 2px; background: var(--ok); }
+    .deck__legend i.f { background: var(--fail); }
+    .bars {
+        display: grid;
+        grid-template-columns: repeat(14, minmax(0, 1fr));
+        align-items: end;
+        gap: 6px;
+        height: 112px;
+        padding-bottom: 1px;
+        border-bottom: 1px solid var(--rule);
         position: relative;
-        padding-right: 1.4em;
-        transition: color 100ms linear;
     }
-    .roster th[data-sort-key]:hover { color: var(--fg-1); }
-    .roster th[data-sort-key]:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 2px;
-        color: var(--fg-1);
-    }
-    .roster th[data-sort-key]::after {
-        content: "↕";
+    .bars::before {
+        content: attr(data-peak);
         position: absolute;
-        right: 0.5em;
+        top: -2px; right: 0;
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: 0.6875rem;
+        color: var(--fg-3);
+    }
+    .bar {
+        display: flex;
+        flex-direction: column-reverse;
+        height: 100%;
+        justify-content: flex-start;
+        border-radius: 3px 3px 0 0;
+        position: relative;
+        outline: none;
+    }
+    .bar__seg { display: block; width: 100%; min-height: 0; }
+    .bar__seg--ok   { background: color-mix(in oklab, var(--ok) 70%, var(--bg-2)); }
+    .bar__seg--fail { background: var(--fail); }
+    .bar__seg--other{ background: var(--pending); }
+    .bar__stack { display: flex; flex-direction: column-reverse; width: 100%; border-radius: 3px 3px 1px 1px; overflow: hidden; transform-origin: bottom; animation: bar-grow 520ms var(--ease-out) both; }
+    .bar__empty { width: 100%; height: 3px; border-radius: 2px; background: var(--bg-3); }
+    .bar:hover .bar__stack, .bar:focus-visible .bar__stack { filter: brightness(1.2); }
+    .bar.is-today .bar__seg--ok { background: var(--ok); }
+    @@keyframes bar-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+    .bar__tip {
+        position: absolute;
+        bottom: calc(100% + 8px);
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 0.35rem 0.55rem;
+        background: var(--bg-3);
+        border: 1px solid var(--rule-strong);
+        border-radius: var(--r-sm);
+        box-shadow: var(--shadow-pop);
+        font-size: var(--t-micro);
+        color: var(--fg-1);
+        white-space: nowrap;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity var(--dur-fast) linear;
+        z-index: 2;
+    }
+    .bar__tip b { color: var(--fg-0); font-weight: 600; }
+    .bar:hover .bar__tip, .bar:focus-visible .bar__tip { opacity: 1; }
+    .bars__axis {
+        display: grid;
+        grid-template-columns: repeat(14, minmax(0, 1fr));
+        gap: 6px;
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: 0.6875rem;
+        color: var(--fg-3);
+        text-align: center;
+    }
+    .bars__axis span.is-today { color: var(--fg-1); }
+
+    /* ---------- Toolbar ---------- */
+    .toolbar {
+        display: flex;
+        align-items: center;
+        gap: var(--s-sm);
+        flex-wrap: wrap;
+        margin-bottom: var(--s-sm);
+    }
+    .toolbar__search { position: relative; flex: 1 1 260px; max-width: 420px; }
+    .toolbar__search .i { position: absolute; left: 0.7rem; top: 50%; transform: translateY(-50%); color: var(--fg-3); pointer-events: none; }
+    .toolbar__search input { padding-left: 2.1rem; padding-right: 2.4rem; }
+    .toolbar__search .kbd-slash { position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); height: 20px; border-bottom-width: 1px; color: var(--fg-3); background: transparent; pointer-events: none; }
+    .toolbar__search input:focus ~ .kbd-slash, .toolbar__search input:not(:placeholder-shown) ~ .kbd-slash { display: none; }
+    .filter-clear {
+        position: absolute;
+        right: 0.35rem;
         top: 50%;
         transform: translateY(-50%);
+        display: grid;
+        place-items: center;
+        width: 24px; height: 24px;
+        border-radius: var(--r-sm);
         color: var(--fg-3);
-        opacity: 0;
-        font-size: 0.85em;
-        transition: opacity 100ms linear, color 100ms linear;
     }
+    .filter-clear:hover { color: var(--fg-0); background: var(--bg-2); }
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4em;
+        height: 30px;
+        padding: 0 0.8em;
+        border-radius: 999px;
+        border: 1px solid var(--rule);
+        background: transparent;
+        color: var(--fg-2);
+        font-size: var(--t-meta);
+        font-weight: 500;
+        transition: color var(--dur-fast) linear, background var(--dur-fast) linear, border-color var(--dur-fast) linear;
+    }
+    .chip:hover { color: var(--fg-0); border-color: var(--rule-strong); }
+    .chip[aria-pressed="true"] { color: var(--fg-0); background: var(--bg-3); border-color: var(--rule-strong); }
+    .chip .n { font-family: var(--mono); font-variation-settings: var(--rec-mono-tight); font-size: var(--t-micro); color: var(--fg-3); }
+    .filter-meta {
+        margin-left: auto;
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono-tight);
+        font-size: var(--t-micro);
+        color: var(--fg-3);
+        white-space: nowrap;
+    }
+
+    /* ---------- Roster ---------- */
+    .home > * { min-width: 0; }
+    .roster-wrap { overflow-x: auto; }
+    .roster { width: 100%; font-size: var(--t-ui); }
+    .roster th {
+        font-size: var(--t-micro);
+        color: var(--fg-3);
+        font-weight: 550;
+        padding: 0.7rem var(--s-md) 0.7rem 0;
+        border-bottom: 1px solid var(--rule);
+        white-space: nowrap;
+        background: color-mix(in oklab, var(--bg-2) 40%, transparent);
+    }
+    .roster th:first-child, .roster td:first-child { padding-left: var(--s-lg); }
+    .roster th:last-child, .roster td:last-child { padding-right: var(--s-md); }
+    .roster th[data-sort-key] { cursor: pointer; user-select: none; transition: color var(--dur-fast) linear; }
+    .roster th[data-sort-key]:hover { color: var(--fg-1); }
+    .roster th[data-sort-key]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; color: var(--fg-1); }
+    .roster th[data-sort-key]::after { content: "↕"; margin-left: 0.4em; opacity: 0; font-size: 0.9em; transition: opacity var(--dur-fast) linear; }
     .roster th[data-sort-key]:hover::after { opacity: 0.5; }
     .roster th.is-sorted { color: var(--fg-1); }
-    .roster th.is-sorted::after {
-        content: "▴";
-        opacity: 1;
-        color: var(--accent);
-    }
+    .roster th.is-sorted::after { content: "▴"; opacity: 1; color: var(--accent); }
     .roster th.is-sorted.is-sorted-desc::after { content: "▾"; }
     .roster td {
-        padding: 0.95em var(--s-md) 0.95em 0;
+        padding: 0.85rem var(--s-md) 0.85rem 0;
         border-bottom: 1px solid var(--rule);
         vertical-align: middle;
         color: var(--fg-1);
     }
+    .roster tbody tr { cursor: pointer; }
     .roster tbody tr:hover td,
-    .roster tbody tr.is-selected td { background: var(--bg-1); }
+    .roster tbody tr.is-selected td { background: color-mix(in oklab, var(--bg-2) 70%, transparent); }
     .roster tbody tr:last-child td { border-bottom-color: transparent; }
+    .roster .col-name { min-width: 180px; }
+    .roster .name-cell { display: flex; align-items: center; gap: 0.75rem; }
+    .roster .script-icon {
+        display: grid;
+        place-items: center;
+        width: 32px; height: 32px;
+        border-radius: 8px;
+        background: var(--bg-2);
+        box-shadow: inset 0 0 0 1px var(--rule), inset 0 1px 0 var(--highlight);
+        color: var(--fg-2);
+        flex: 0 0 auto;
+        font-family: var(--mono);
+        font-variation-settings: var(--rec-mono);
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
     .roster .col-name a {
-        font-family: var(--sans);
+        display: block;
         font-weight: 600;
         font-size: var(--t-body);
         color: var(--fg-0);
         border-bottom: none;
-        letter-spacing: -0.012em;
+        letter-spacing: -0.01em;
     }
-    .roster .col-name a:hover { color: var(--accent); }
-    .roster .col-name .cat {
-        display: block;
+    .roster tr:hover .col-name a { color: var(--fg-0); }
+    .roster .col-name .cat { display: block; font-size: var(--t-micro); color: var(--fg-3); margin-top: 0.1rem; }
+    .roster .col-runs { white-space: nowrap; }
+    .roster .runs { display: flex; align-items: center; gap: 0.75rem; }
+    .roster .rate {
         font-family: var(--mono);
         font-variation-settings: var(--rec-mono-tight);
-        font-size: var(--t-meta);
-        color: var(--fg-3);
-        letter-spacing: 0;
-        margin-top: 0.35em;
+        font-size: var(--t-micro);
+        color: var(--fg-2);
+        min-width: 3.5em;
     }
-    .roster .col-author { font-family: var(--mono); font-variation-settings: var(--rec-mono-tight); font-size: var(--t-ui); color: var(--fg-2); }
-    .roster .col-last   { font-family: var(--mono); font-variation-settings: var(--rec-mono-tight); font-size: var(--t-ui); color: var(--fg-2); white-space: nowrap; }
-    .roster .col-action { text-align: right; white-space: nowrap; }
-    .roster .col-action .open {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4em;
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono-tight);
-        font-size: var(--t-ui);
+    .roster .rate.is-low { color: color-mix(in oklab, var(--fail) 60%, var(--fg-0)); }
+    .roster .col-author { font-size: var(--t-meta); color: var(--fg-2); white-space: nowrap; }
+    .roster .col-last { font-family: var(--mono); font-variation-settings: var(--rec-mono-tight); font-size: var(--t-meta); color: var(--fg-2); white-space: nowrap; }
+    .roster .col-never { font-size: var(--t-meta); color: var(--fg-3); }
+    .roster .col-action { text-align: right; white-space: nowrap; width: 1%; }
+    .roster .open {
+        display: inline-grid;
+        place-items: center;
+        width: 30px; height: 30px;
+        border-radius: var(--r-md);
         color: var(--fg-3);
-        text-decoration: none;
         border: 1px solid transparent;
-        background: transparent;
-        padding: 0.4em 0.8em;
-        border-radius: 4px;
-        opacity: 0.55;
-        transition: opacity 100ms linear, background 100ms linear, border-color 100ms linear, color 100ms linear;
+        transition: background var(--dur-fast) linear, color var(--dur-fast) linear, border-color var(--dur-fast) linear, transform var(--dur-med) var(--ease-out);
     }
-    .roster tr:hover .col-action .open,
-    .roster tr.is-selected .col-action .open,
-    .roster .col-action .open:focus-visible { opacity: 1; color: var(--fg-1); border-color: var(--rule-strong); }
-    .roster .col-action .open:hover { background: var(--accent); color: oklch(15% 0.020 50); border-color: var(--accent); }
-    /* Last failed row gets a persistent ghost button — likely the row the operator came to fix. */
-    .roster tr.is-last-failed .col-action .open { opacity: 1; color: var(--fg-1); border-color: var(--rule-strong); }
-    /* Currently running script — mirror the topbar dock signal inline on the row.
-       The active-moment exception in the brief: a left edge in accent-soft is allowed
-       precisely because the running row is the *one* place the page shouldn't be quiet. */
-    .roster tr.is-running td { background: color-mix(in oklab, var(--accent) 11%, transparent); }
-    .roster tr.is-running td:first-child {
-        box-shadow: inset 2px 0 0 var(--accent);
+    .roster tr:hover .open, .roster tr.is-selected .open, .roster .open:focus-visible {
+        color: var(--fg-0);
+        border-color: var(--rule-strong);
+        background: var(--bg-2);
+        transform: translateX(2px);
     }
-    .roster tr.is-running .col-name a { color: var(--fg-0); }
-    .roster tr.is-running .col-author,
-    .roster tr.is-running .col-last { color: var(--fg-1); }
+    .roster .script-icon[data-s="completed"] { color: color-mix(in oklab, var(--ok) 80%, var(--fg-0)); }
+    .roster .script-icon[data-s="failed"] { color: var(--fail); background: color-mix(in oklab, var(--fail) 10%, var(--bg-2)); }
+    .roster tr.is-last-failed .col-name .script-icon { color: var(--fail); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--fail) 35%, transparent); }
+    .roster tr.is-running td { background: color-mix(in oklab, var(--accent) 7%, transparent); }
+    .roster tr.is-running .script-icon { color: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 45%, transparent); }
 
-    .roster__head {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        margin-bottom: var(--s-md);
-        gap: var(--s-md);
-        flex-wrap: wrap;
-    }
-    .roster__head h2 { font-size: var(--t-h2); letter-spacing: -0.022em; }
-    .roster__title { display: flex; align-items: baseline; gap: var(--s-sm); }
-    .roster__head .summary {
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono-tight);
-        font-size: var(--t-ui);
-        color: var(--fg-3);
-        letter-spacing: 0;
-    }
-    .roster__head .summary a { color: inherit; border-bottom: 1px dotted var(--rule-strong); }
-    .roster__head .summary a:hover { color: var(--accent); border-bottom-color: var(--accent); }
-    .roster__head .summary .fail { color: var(--fail); }
-    .roster__head .add {
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono-tight);
-        font-size: var(--t-meta);
-        color: var(--fg-2);
-        border: 1px solid var(--rule);
-        background: var(--bg-1);
-        padding: 0.3em 0.7em;
-        border-radius: 4px;
-        text-decoration: none;
-    }
-    .roster__head .add:hover { color: var(--fg-0); border-color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, var(--bg-1)); }
-
-    /* Filter bar */
-    .roster__filter {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        align-items: center;
-        gap: var(--s-sm);
-        margin-bottom: var(--s-sm);
-        padding-bottom: var(--s-xs);
-    }
-    .roster__filter input[type="search"] {
-        background: var(--bg-1);
-        border: 1px solid var(--rule);
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono-tight);
-        font-size: var(--t-ui);
-        padding: 0.45em 0.7em 0.45em 1.8em;
-        background-image:
-            linear-gradient(transparent, transparent),
-            radial-gradient(circle, transparent 0);
-        background-position: 0.6em center;
-        background-size: auto;
-        background-repeat: no-repeat;
-    }
-    .roster__filter .filter-wrap { position: relative; }
-    .roster__filter .filter-wrap::before {
-        content: "/";
-        position: absolute;
-        left: 0.7em;
-        top: 50%;
-        transform: translateY(-50%);
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono-tight);
-        font-size: var(--t-ui);
-        color: var(--fg-3);
-        pointer-events: none;
-    }
-    .roster__filter .filter-wrap input { padding-left: 1.7em; padding-right: 2.6em; }
-    .roster__filter .filter-clear {
-        position: absolute;
-        right: 0.5em;
-        top: 50%;
-        transform: translateY(-50%);
-        background: none;
-        border: none;
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono-tight);
-        font-size: var(--t-meta);
-        color: var(--fg-3);
-        cursor: pointer;
-        padding: 0.15em 0.35em;
-        border-radius: 3px;
-    }
-    .roster__filter .filter-clear:hover { color: var(--fg-0); background: var(--bg-2); }
-    .roster__filter .filter-meta {
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono-tight);
-        font-size: var(--t-meta);
-        color: var(--fg-3);
-        white-space: nowrap;
-    }
-
-    /* Empty state */
-    .roster__empty {
-        padding: var(--s-2xl) var(--s-md);
-        text-align: left;
-        color: var(--fg-2);
-        border: 1px dashed var(--rule-strong);
-        border-radius: 4px;
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono);
-    }
-    .roster__empty p { margin-bottom: var(--s-md); }
     .roster__no-match {
         display: none;
-        padding: var(--s-lg) var(--s-md);
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono);
+        padding: var(--s-xl) var(--s-lg);
         font-size: var(--t-ui);
-        color: var(--fg-3);
-        border: 1px dashed var(--rule);
-        border-radius: 4px;
-        margin-top: var(--s-sm);
+        color: var(--fg-2);
+        text-align: center;
+        border-top: 1px solid var(--rule);
     }
     .roster.is-empty + .roster__no-match { display: block; }
 
-    /* Side rail — recent jobs */
-    .rail h6 {
-        font-size: var(--t-meta);
-        color: var(--fg-3);
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        font-weight: 600;
-        padding-bottom: var(--s-sm);
-        border-bottom: 1px solid var(--rule);
-        margin-bottom: var(--s-sm);
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--s-sm);
+        padding: var(--s-2xl) var(--s-xl);
     }
+    .empty-state__icon {
+        display: grid; place-items: center;
+        width: 44px; height: 44px;
+        border-radius: 12px;
+        background: var(--bg-2);
+        color: var(--fg-2);
+        box-shadow: inset 0 0 0 1px var(--rule);
+    }
+    .empty-state h3 { font-size: var(--t-lead); }
+    .empty-state p { color: var(--fg-2); font-size: var(--t-ui); max-width: 52ch; }
+    .empty-state code { color: var(--fg-1); }
+
+    /* ---------- Activity rail ---------- */
+    .rail { position: sticky; top: calc(var(--topbar-h) + var(--s-lg)); }
+    .rail__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: var(--s-sm);
+        margin-bottom: var(--s-2xs);
+    }
+    .rail__head h2 { font-size: var(--t-ui); font-weight: 600; color: var(--fg-1); letter-spacing: 0; display: flex; align-items: center; gap: 0.5em; }
+    .rail__head .live { display: inline-flex; align-items: center; gap: 0.4em; font-size: var(--t-micro); color: var(--fg-3); }
+    .rail__head .live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); animation: pulse 2.4s ease-in-out infinite; }
     .rail ol {
         list-style: none;
         padding: 0; margin: 0;
         display: flex;
         flex-direction: column;
+        position: relative;
+    }
+    .rail ol::before {
+        content: "";
+        position: absolute;
+        left: 4px; top: 12px; bottom: 12px;
+        width: 1px;
+        background: var(--rule);
     }
     .rail li {
-        padding: var(--s-sm) 0;
-        border-bottom: 1px solid var(--rule);
-        font-size: var(--t-ui);
         display: grid;
-        grid-template-columns: auto 1fr auto;
-        gap: 0.6em;
+        grid-template-columns: 9px minmax(0, 1fr) auto;
+        gap: 0.4rem 0.8rem;
         align-items: center;
-    }
-    .rail li:last-child { border-bottom: none; }
-    /* Status in rail: disc + 3-letter mono label so meaning isn't color-only. */
-    .rail .status { font-size: var(--t-meta); color: var(--fg-2); }
-    .rail .name { color: var(--fg-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .rail .when { font-family: var(--mono); font-variation-settings: var(--rec-mono-tight); font-size: var(--t-meta); color: var(--fg-3); letter-spacing: 0; }
-    .rail__empty {
-        padding: var(--s-md) 0;
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono);
+        padding: 0.55rem 0;
         font-size: var(--t-ui);
-        color: var(--fg-3);
+        position: relative;
     }
-    .rail__more {
-        margin-top: var(--s-sm);
-        font-size: var(--t-meta);
-        color: var(--fg-3);
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono-tight);
-    }
-    .roster .col-never {
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono-tight);
-        font-size: var(--t-meta);
-        color: var(--fg-3);
-    }
+    .rail .status { font-size: 0; gap: 0; position: relative; z-index: 1; }
+    .rail .status::before { box-shadow: 0 0 0 3px var(--bg-0) !important; }
+    .rail .who { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
+    .rail .name { color: var(--fg-0); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rail .x { margin-left: 0.45em; font-family: var(--mono); font-variation-settings: var(--rec-mono-tight); font-size: var(--t-micro); color: var(--fg-3); font-weight: 400; }
+    .rail .by { font-size: var(--t-micro); color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rail .when { font-family: var(--mono); font-variation-settings: var(--rec-mono-tight); font-size: var(--t-micro); color: var(--fg-3); }
+    .rail__empty { padding: var(--s-md) 0; font-size: var(--t-ui); color: var(--fg-3); }
+    .rail__more { margin-top: var(--s-sm); font-size: var(--t-meta); }
+    .rail__more a { display: inline-flex; align-items: center; gap: 0.3em; color: var(--fg-2); border: none; }
+    .rail__more a:hover { color: var(--fg-0); }
 
-    @@media (max-width: 1000px) {
+    @@media (max-width: 1180px) {
         .home { grid-template-columns: 1fr; }
+        .rail { position: static; }
+    }
+    @@media (max-width: 760px) {
+        .deck { grid-template-columns: minmax(0, 1fr); }
+        .deck__facts dd { font-size: var(--t-body); }
+        .bars, .bars__axis { gap: 3px; }
+        .bars__axis span:not(.is-today) { visibility: hidden; }
+        .toolbar__search { max-width: none; }
+        .filter-meta { display: none; }
+        .roster .col-last, .roster th[data-sort-key="last-run"] { display: none; }
+        .deck__state { border-right: none; border-bottom: 1px solid var(--rule); }
+        .roster .col-author, .roster th[data-sort-key="author"] { display: none; }
+        .roster .col-runs .runway { display: none; }
     }
 </style>
 
-<section class="home" data-home>
-    <article>
-        <div class="roster__head">
-            <div class="roster__title">
-                <h2>Scripts</h2>
-                <div class="summary" data-summary>
-                    @{
-                        var n = scripts?.Count ?? 0;
+@{
+    var n = scripts?.Count ?? 0;
+    var deckState = runningJob != null ? "running" : (failed24h > 0 ? "failing" : "idle");
+}
+
+<header class="page-head">
+    <div class="page-head__title">
+        <h1>Scripts</h1>
+        <span class="meta" data-summary>
+            <span data-numeric>@n</span> @(n == 1 ? "script" : "scripts") in @categories.Count @(categories.Count == 1 ? "category" : "categories")
+        </span>
+    </div>
+    <div class="page-head__actions">
+        <button type="button" class="btn" data-shortcuts-open="concepts">
+            <svg class="i" aria-hidden="true"><use href="#i-help"/></svg>How it works
+        </button>
+        @if (canAuthor)
+        {
+            <a href="/PowerShell/Create" class="btn">
+                <svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>New script
+            </a>
+        }
+    </div>
+</header>
+
+<section class="deck surface" aria-label="Status">
+    <div class="deck__state">
+        <div class="deck__now" data-deck-now data-state="@deckState">
+            <span class="deck__now-icon" aria-hidden="true">
+                <svg class="i"><use href="@(deckState == "running" ? "#i-bolt" : deckState == "failing" ? "#i-alert" : "#i-check")"/></svg>
+            </span>
+            <div>
+                <div class="deck__now-title" data-deck-title>
+                    @if (runningJob != null)
+                    {
+                        <a href="/PowerShell/Details/@runningJob.ScriptId">@(runningJob.Script?.Name) is running</a>
                     }
-                    <span data-numeric>@n</span> @(n == 1 ? "script" : "scripts")
-                    <span data-jobs-block style="@(recentJobs != null && recentJobs.Any() ? "" : "display:none")">
-                        &middot; <span data-numeric data-jobs-total>@(completed24h + failed24h)</span> jobs / 24h
-                        <span data-failed-block style="@(failed24h > 0 ? "" : "display:none")">
-                            (<a href="/Scripts/Jobs" class="fail"><span data-numeric data-failed-count>@failed24h</span> failed</a>)
-                        </span>
-                    </span>
-                    &middot; <a data-shortcuts-open="concepts">how scripts work ›</a>
+                    else if (failed24h > 0)
+                    {
+                        <text>@failed24h @(failed24h == 1 ? "failure" : "failures") in 24h</text>
+                    }
+                    else
+                    {
+                        <text>All systems nominal</text>
+                    }
+                </div>
+                <div class="deck__now-sub" data-deck-sub>
+                    @if (runningJob != null)
+                    {
+                        <text>started by @runningJob.UserName · @ago(runningJob.Date)</text>
+                    }
+                    else if (failed24h > 0)
+                    {
+                        <text>check the audit log for details</text>
+                    }
+                    else
+                    {
+                        <text>nothing running, no failures in the last 24h</text>
+                    }
                 </div>
             </div>
-            @if (canAuthor)
-            {
-                <a href="/PowerShell/Create" class="add">+ new script</a>
-            }
         </div>
 
+        <dl class="deck__facts">
+            <div>
+                <dt>Runs · 24h</dt>
+                <dd data-numeric data-deck-total>@total24h.ToString("N0")</dd>
+            </div>
+            <div>
+                <dt>Success · 24h</dt>
+                <dd data-numeric data-deck-rate>@(rate24h.HasValue ? (rate24h.Value * 100).ToString(rate24h.Value >= 0.995 && rate24h.Value < 1 ? "0.0" : "0") + "%" : "—")</dd>
+            </div>
+            <div>
+                <dt>Failures · 24h</dt>
+                <dd data-numeric data-deck-failed class="@(failed24h > 0 ? "is-fail" : "")">
+                    @if (failed24h > 0) { <a href="/Scripts/Jobs">@failed24h</a> } else { <text>0</text> }
+                </dd>
+            </div>
+        </dl>
+
+        @if (nextRecurring != null)
+        {
+            <div class="deck__next">
+                <svg class="i i--sm" aria-hidden="true"><use href="#i-repeat"/></svg>
+                <span><strong>@nextRecurring.Script?.Name</strong> recurs @(string.IsNullOrWhiteSpace(nextRecurring.Outcome) ? "on a schedule" : nextRecurring.Outcome.ToLowerInvariant())</span>
+            </div>
+        }
+    </div>
+
+    <figure class="deck__chart">
+        <div class="deck__chart-head">
+            <h2>Activity · 14 days <span class="faint" style="font-weight:400">· @total14d.ToString("N0") runs</span></h2>
+            <div class="deck__legend" aria-hidden="true">
+                <span><i></i>completed</span>
+                <span><i class="f"></i>failed</span>
+            </div>
+        </div>
+        <div class="bars" data-peak="@peak.ToString("N0")" role="img" aria-label="Runs per day for the last 14 days, @total14d runs total">
+            @foreach (var d in activity)
+            {
+                var isToday = d.Day == DateTime.Today;
+                var h = d.Total == 0 ? 0 : Math.Max(4, d.Total * 100.0 / peak);
+                <div class="bar @(isToday ? "is-today" : "")" tabindex="0">
+                    @if (d.Total == 0)
+                    {
+                        <span class="bar__empty"></span>
+                    }
+                    else
+                    {
+                        <span class="bar__stack" style="height:@(h.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%">
+                            <span class="bar__seg bar__seg--ok" style="flex:@d.Completed"></span>
+                            <span class="bar__seg bar__seg--fail" style="flex:@d.Failed"></span>
+                            <span class="bar__seg bar__seg--other" style="flex:@d.Other"></span>
+                        </span>
+                    }
+                    <span class="bar__tip"><b>@d.Day.ToString("ddd MMM d")</b> · @d.Total.ToString("N0") runs@(d.Failed > 0 ? $" · {d.Failed} failed" : "")</span>
+                </div>
+            }
+        </div>
+        <div class="bars__axis" aria-hidden="true">
+            @foreach (var d in activity)
+            {
+                var isToday = d.Day == DateTime.Today;
+                <span class="@(isToday ? "is-today" : "")">@(isToday ? "today" : (d.Day.DayOfWeek == DayOfWeek.Monday || d == activity.First() ? d.Day.ToString("MMM d") : d.Day.ToString("ddd")[..1]))</span>
+            }
+        </div>
+    </figure>
+</section>
+
+<section class="home" data-home>
+    <article>
         @if (scripts != null && scripts.Any())
         {
-            <div class="roster__filter">
-                <div class="filter-wrap">
+            <div class="toolbar">
+                <div class="toolbar__search">
+                    <svg class="i" aria-hidden="true"><use href="#i-search"/></svg>
                     <input type="search"
                            id="roster-filter"
                            data-roster-filter
-                           placeholder="filter by name, author, or category"
+                           placeholder="Filter by name, author, or category"
                            autocomplete="off"
                            spellcheck="false"
                            aria-label="Filter scripts" />
-                    <button type="button" class="filter-clear" data-roster-filter-clear hidden aria-label="Clear filter (esc)" title="Clear (esc)">[ x ]</button>
+                    <kbd class="kbd-slash" aria-hidden="true">/</kbd>
+                    <button type="button" class="filter-clear" data-roster-filter-clear hidden aria-label="Clear filter (esc)" title="Clear (esc)">
+                        <svg class="i i--sm" aria-hidden="true"><use href="#i-x"/></svg>
+                    </button>
                 </div>
+                @if (categories.Count > 1)
+                {
+                    <div class="chips" role="group" aria-label="Filter by category" data-cat-chips>
+                        <button type="button" class="chip" aria-pressed="true" data-cat="">All <span class="n">@n</span></button>
+                        @foreach (var c in categories)
+                        {
+                            <button type="button" class="chip" aria-pressed="false" data-cat="@c.ToLowerInvariant()">@c <span class="n">@scripts.Count(x => (x.Category?.Name ?? "uncategorised") == c)</span></button>
+                        }
+                    </div>
+                }
                 <div class="filter-meta" data-filter-meta>
-                    <span data-numeric data-visible-count>@n</span> / <span data-numeric>@n</span>
+                    <span data-numeric data-visible-count>@n</span> of <span data-numeric>@n</span>
                 </div>
             </div>
 
-            <table class="roster" data-numeric data-roster>
-                <thead>
-                    <tr>
-                        <th data-sort-key="name" tabindex="0" role="columnheader" aria-sort="none">name</th>
-                        <th data-sort-key="author" tabindex="0" role="columnheader" aria-sort="none">author</th>
-                        <th data-sort-key="last-status" tabindex="0" role="columnheader" aria-sort="none">last status</th>
-                        <th data-sort-key="last-run" tabindex="0" role="columnheader" aria-sort="none">last run</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                @{ var lastFailedScriptId = recentJobs?.FirstOrDefault(j => j.Status == Status.Failed)?.ScriptId; }
-                @foreach (var s in scripts)
-                {
-                    var lastJob = recentJobs?.FirstOrDefault(j => j.ScriptId == s.Id);
-                    var classes = new System.Collections.Generic.List<string>();
-                    if (s.Id == lastFailedScriptId) classes.Add("is-last-failed");
-                    if (runningJob != null && runningJob.ScriptId == s.Id) classes.Add("is-running");
-                    var rowClass = string.Join(' ', classes);
-                    var category = s.Category?.Name ?? "uncategorised";
-                    var author = string.IsNullOrEmpty(s.Author) ? "—" : s.Author;
-                    var filterKey = $"{s.Name} {author} {category}".ToLowerInvariant();
-                    <tr class="@rowClass" data-row data-script-id="@s.Id" data-filter-key="@filterKey">
-                        <td class="col-name">
-                            <a asp-controller="PowerShell" asp-action="Details" asp-route-id="@s.Id" data-row-link>@s.Name</a>
-                            <span class="cat">@category</span>
-                        </td>
-                        <td class="col-author">@author</td>
-                        <td data-status-cell>
-                            @if (runningJob != null && runningJob.ScriptId == s.Id)
-                            {
-                                <span class="status" data-state="running">running</span>
-                            }
-                            else if (lastJob != null && lastJob.Status == Status.Failed && !string.IsNullOrEmpty(lastJob.Outcome))
-                            {
-                                <span class="status" data-state="failed" title="@firstLine(lastJob.Outcome)">failed</span>
-                            }
-                            else if (lastJob != null)
-                            {
-                                <span class="status" data-state="@statusToken(lastJob.Status)">@statusLabel(lastJob.Status)</span>
-                            }
-                            else
-                            {
-                                <span class="col-never">never run</span>
-                            }
-                        </td>
-                        <td class="col-last" data-last-cell data-last-iso="@(lastJob != null ? lastJob.Date.ToString("o") : "")">@(lastJob != null ? ago(lastJob.Date) : "—")</td>
-                        <td class="col-action">
-                            <a class="open" asp-controller="PowerShell" asp-action="Details" asp-route-id="@s.Id" title="Open @s.Name" data-open>open ›</a>
-                        </td>
-                    </tr>
-                }
-                </tbody>
-            </table>
-            <div class="roster__no-match">$ no scripts match.</div>
+            <div class="surface roster-wrap">
+                <table class="roster" data-numeric data-roster>
+                    <thead>
+                        <tr>
+                            <th data-sort-key="name" tabindex="0" role="columnheader" aria-sort="none">Script</th>
+                            <th>Recent runs</th>
+                            <th data-sort-key="last-status" tabindex="0" role="columnheader" aria-sort="none">Last status</th>
+                            <th data-sort-key="last-run" tabindex="0" role="columnheader" aria-sort="none">Last run</th>
+                            <th data-sort-key="author" tabindex="0" role="columnheader" aria-sort="none">Author</th>
+                            <th><span class="sr-only">Open</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @{ var lastFailedScriptId = recentJobs?.FirstOrDefault(j => j.Status == Status.Failed)?.ScriptId; }
+                    @foreach (var s in scripts)
+                    {
+                        var lastJob = recentJobs?.FirstOrDefault(j => j.ScriptId == s.Id);
+                        var hist = runHistory.TryGetValue(s.Id, out var hl) ? hl : new System.Collections.Generic.List<Status>();
+                        var classes = new System.Collections.Generic.List<string>();
+                        if (s.Id == lastFailedScriptId) classes.Add("is-last-failed");
+                        if (runningJob != null && runningJob.ScriptId == s.Id) classes.Add("is-running");
+                        var rowClass = string.Join(' ', classes);
+                        var category = s.Category?.Name ?? "uncategorised";
+                        var author = string.IsNullOrEmpty(s.Author) ? "—" : s.Author;
+                        var filterKey = $"{s.Name} {author} {category}".ToLowerInvariant();
+                        var rate = rates.TryGetValue(s.Id, out var rr) ? rr : (0, 0);
+                        var ticks = Enumerable.Reverse(hist).ToList();
+                        var pad = Math.Max(0, 16 - ticks.Count);
+                        if (ticks.Count > 16) { ticks = ticks.Skip(ticks.Count - 16).ToList(); pad = 0; }
+                        // Fallback for last status when the 24h window is empty: use the newest history entry.
+                        Status? lastStatus = lastJob?.Status ?? (hist.Count > 0 ? hist[0] : (Status?)null);
+                        <tr class="@rowClass" data-row data-script-id="@s.Id" data-filter-key="@filterKey" data-category="@category.ToLowerInvariant()">
+                            <td class="col-name">
+                                <div class="name-cell">
+                                    <span class="script-icon" aria-hidden="true" data-s="@(lastStatus != null ? statusToken(lastStatus.Value) : "none")"><svg class="i"><use href="#i-terminal"/></svg></span>
+                                    <div>
+                                        <a asp-controller="PowerShell" asp-action="Details" asp-route-id="@s.Id" data-row-link>@s.Name</a>
+                                        <span class="cat">@category</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="col-runs">
+                                <div class="runs">
+                                    <span class="runway" aria-hidden="true">
+                                        @for (var k = 0; k < pad; k++) { <i data-s="empty"></i> }
+                                        @foreach (var t in ticks) { <i data-s="@statusToken(t)"></i> }
+                                    </span>
+                                    @if (rate.Item2 > 0)
+                                    {
+                                        var pct = rate.Item1 * 100 / rate.Item2;
+                                        <span class="rate @(pct < 90 ? "is-low" : "")" title="@rate.Item1 of the last @rate.Item2 finished runs succeeded">@pct%</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="rate faint">—</span>
+                                    }
+                                </div>
+                            </td>
+                            <td data-status-cell>
+                                @if (runningJob != null && runningJob.ScriptId == s.Id)
+                                {
+                                    <span class="status" data-state="running">running</span>
+                                }
+                                else if (lastJob != null && lastJob.Status == Status.Failed && !string.IsNullOrEmpty(lastJob.Outcome))
+                                {
+                                    <span class="status" data-state="failed" title="@firstLine(lastJob.Outcome)">failed</span>
+                                }
+                                else if (lastStatus != null)
+                                {
+                                    <span class="status" data-state="@statusToken(lastStatus.Value)">@statusLabel(lastStatus.Value)</span>
+                                }
+                                else
+                                {
+                                    <span class="col-never">never run</span>
+                                }
+                            </td>
+                            @{ DateTime? lastDate = lastJob?.Date ?? (lastRunDates.TryGetValue(s.Id, out var ld) ? ld : (DateTime?)null); }
+                            <td class="col-last" data-last-cell data-last-iso="@(lastDate?.ToString("o") ?? "")">@(lastDate != null ? ago(lastDate.Value) : "—")</td>
+                            <td class="col-author">@author</td>
+                            <td class="col-action">
+                                <a class="open" asp-controller="PowerShell" asp-action="Details" asp-route-id="@s.Id" title="Open @s.Name" aria-label="Open @s.Name" data-open>
+                                    <svg class="i" aria-hidden="true"><use href="#i-chevron"/></svg>
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+                <div class="roster__no-match">No scripts match that filter. Press <kbd>esc</kbd> to clear it.</div>
+            </div>
         }
         else
         {
-            <div class="roster__empty">
-                <p>$ ls scripts/ &mdash; <span style="color: var(--fg-3)">empty</span></p>
+            <div class="surface empty-state">
+                <span class="empty-state__icon" aria-hidden="true"><svg class="i i--lg"><use href="#i-scripts"/></svg></span>
+                <h3>No scripts yet</h3>
                 @if (canAuthor)
                 {
-                    <p>No scripts in any category you can see. <a href="/PowerShell/Create">Add one</a> to get started.</p>
+                    <p>Scripts are PowerShell files your team can launch, schedule, and audit from here. Add your first one to get started.</p>
+                    <a href="/PowerShell/Create" class="btn btn-primary"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>New script</a>
                 }
                 else
                 {
-                    <p>
-                        No scripts in any category you can see.
-                        Categories control what you can run; ask an administrator to grant you one, or to add a script.
-                    </p>
+                    <p>You don't have access to any scripts yet. Access is granted per category; ask an administrator to add you to one.</p>
                 }
             </div>
         }
     </article>
 
     <aside class="rail" data-rail>
-        <h6>Recent activity</h6>
+        <div class="rail__head">
+            <h2><svg class="i i--sm" aria-hidden="true"><use href="#i-history"/></svg>Activity</h2>
+            <span class="live">live</span>
+        </div>
         <ol data-rail-list style="@(recentJobs != null && recentJobs.Any() ? "" : "display:none")">
         @if (recentJobs != null)
         {
+            var groups = new System.Collections.Generic.List<(Job job, int count)>();
             foreach (var j in recentJobs)
+            {
+                if (groups.Count > 0 && groups[^1].job.ScriptId == j.ScriptId && groups[^1].job.Status == j.Status)
+                    groups[^1] = (groups[^1].job, groups[^1].count + 1);
+                else
+                    groups.Add((j, 1));
+            }
+            foreach (var (j, cnt) in groups.Take(8))
             {
                 <li data-rail-iso="@j.Date.ToString("o")">
                     <span class="status" data-state="@statusToken(j.Status)" title="@statusLabel(j.Status)">@statusShort(j.Status)</span>
-                    <span class="name" title="@(j.Script?.Name ?? "(deleted)")">@(j.Script?.Name ?? "(deleted)")</span>
+                    <span class="who">
+                        <span class="name" title="@(j.Script?.Name ?? "(deleted)")">@(j.Script?.Name ?? "(deleted)")@if (cnt > 1) {<span class="x">×@cnt</span>}</span>
+                        <span class="by">@statusLabel(j.Status) · @(string.IsNullOrEmpty(j.UserName) ? "system" : j.UserName)</span>
+                    </span>
                     <span class="when">@ago(j.Date)</span>
                 </li>
             }
         }
         </ol>
-        <p class="rail__more" data-rail-more style="@(recentJobs != null && recentJobs.Any() ? "" : "display:none")"><a href="/Scripts/Jobs">full audit ›</a></p>
-        <div class="rail__empty" data-rail-empty style="@(recentJobs == null || !recentJobs.Any() ? "" : "display:none")">$ no jobs in 24h</div>
+        <p class="rail__more" data-rail-more style="@(recentJobs != null && recentJobs.Any() ? "" : "display:none")">
+            <a href="/Scripts/Jobs">Open full audit log <svg class="i i--sm" aria-hidden="true"><use href="#i-chevron"/></svg></a>
+        </p>
+        <div class="rail__empty" data-rail-empty style="@(recentJobs == null || !recentJobs.Any() ? "" : "display:none")">No runs in the last 24 hours.</div>
     </aside>
 </section>

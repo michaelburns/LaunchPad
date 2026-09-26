@@ -42,8 +42,8 @@
     }
     .author__row label {
         font-size: var(--t-meta);
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
+        text-transform: none;
+        letter-spacing: 0;
         color: var(--fg-2);
         margin: 0;
     }
@@ -55,7 +55,7 @@
         padding: 0.5em 0.7em;
         background: var(--bg-1);
         border: 1px solid var(--rule);
-        border-radius: 4px;
+        border-radius: var(--r-lg);
         display: inline-flex;
         align-items: center;
         gap: 0.5em;
@@ -63,13 +63,13 @@
     }
     .author__row .name-locked .lock-tag {
         font-size: var(--t-micro);
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
+        text-transform: none;
+        letter-spacing: 0;
         color: var(--fg-3);
         padding: 0.05em 0.35em;
         background: var(--bg-2);
         border: 1px solid var(--rule);
-        border-radius: 3px;
+        border-radius: var(--r-sm);
     }
 
     .editor-block { display: flex; flex-direction: column; gap: var(--s-xs); }
@@ -82,8 +82,8 @@
     }
     .editor-block__head h3 {
         font-size: var(--t-meta);
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
+        text-transform: none;
+        letter-spacing: 0;
         color: var(--fg-2);
         font-weight: 600;
     }
@@ -125,7 +125,7 @@
         color: var(--fg-1);
         background: var(--bg-2);
         border: 1px solid var(--rule-strong);
-        border-radius: 3px;
+        border-radius: var(--r-sm);
         font-family: var(--mono);
         font-variation-settings: var(--rec-mono-tight);
     }
@@ -138,7 +138,7 @@
         padding: 0.4em 0.8em;
         border: 1px solid var(--rule);
         background: transparent;
-        border-radius: 4px;
+        border-radius: var(--r-lg);
         text-decoration: none;
         cursor: pointer;
     }
@@ -156,7 +156,7 @@
         padding: var(--s-sm) var(--s-md);
         background: color-mix(in oklab, var(--fail) 8%, var(--bg-1));
         border: 1px solid color-mix(in oklab, var(--fail) 45%, var(--rule-strong));
-        border-radius: 4px;
+        border-radius: var(--r-lg);
         margin-bottom: var(--s-md);
     }
 
@@ -172,7 +172,7 @@
         color: var(--fg-2);
         background: color-mix(in oklab, var(--accent) 8%, var(--bg-1));
         border: 1px solid color-mix(in oklab, var(--accent) 35%, var(--rule-strong));
-        border-radius: 4px;
+        border-radius: var(--r-lg);
     }
     .draft-pill[hidden] { display: none; }
     .draft-pill__label { color: var(--fg-1); }
@@ -184,7 +184,7 @@
         background: var(--bg-2);
         border: 1px solid var(--rule);
         padding: 0.15em 0.5em;
-        border-radius: 3px;
+        border-radius: var(--r-sm);
         cursor: pointer;
     }
     .draft-pill__action:hover { color: var(--fg-0); border-color: var(--rule-strong); }
@@ -203,21 +203,21 @@
         color: var(--fg-2);
         background: var(--bg-1);
         border: 1px solid var(--rule);
-        border-left: 1px solid var(--accent-soft);
-        border-radius: 4px;
+        border: 1px solid var(--rule);
+        border-radius: var(--r-lg);
         letter-spacing: 0;
     }
     .params-preview[hidden] { display: none; }
     .params-preview__label {
         font-size: var(--t-micro);
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
+        text-transform: none;
+        letter-spacing: 0;
         color: var(--fg-3);
         flex: 0 0 auto;
     }
     .params-preview__msg { color: var(--fg-2); }
-    .params-preview.is-empty { border-left-color: var(--rule); }
-    .params-preview.is-error { border-left-color: var(--fail); }
+    .params-preview.is-empty { border-color: var(--rule); }
+    .params-preview.is-error { border-color: color-mix(in oklab, var(--fail) 45%, var(--rule)); }
     .params-preview.is-error .params-preview__msg { color: var(--fail); }
     .params-preview .arg { display: inline-flex; align-items: baseline; }
     .params-preview .arg__k { color: var(--fg-1); }
@@ -237,7 +237,7 @@
             <span class="meta">@(Model.Name + ".ps1") · edit</span>
             <span class="dirty-dot" data-dirty-dot hidden title="unsaved changes"></span>
         </div>
-        <a class="ghost" asp-action="Details" asp-route-id="@Model.Id">cancel</a>
+        <a class="ghost" asp-action="Details" asp-route-id="@Model.Id">Cancel</a>
     </header>
 
     <form asp-action="Edit" method="post" class="author__form" data-author-form data-draft-key="lp.draft.edit.@Model.Id">
@@ -272,8 +272,8 @@
         </div>
 
         <div class="author__actions">
-            <button type="submit" class="btn btn-primary">save changes</button>
-            <a class="ghost" asp-action="Details" asp-route-id="@Model.Id">cancel</a>
+            <button type="submit" class="btn btn-primary"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Save changes</button>
+            <a class="ghost" asp-action="Details" asp-route-id="@Model.Id">Cancel</a>
             <span class="kbd-hint"><kbd data-kbd-save>⌘S</kbd> to save</span>
         </div>
     </form>

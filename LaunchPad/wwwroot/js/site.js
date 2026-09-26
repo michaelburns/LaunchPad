@@ -508,14 +508,16 @@
     if (!roster) return;
     const needle = (q || '').trim().toLowerCase();
     let n = 0;
+    const cat = roster.getAttribute('data-cat') || '';
     rows.forEach((r) => {
       const key = r.getAttribute('data-filter-key') || '';
-      const match = !needle || key.includes(needle);
+      const match = (!needle || key.includes(needle))
+        && (!cat || (r.getAttribute('data-category') || '') === cat);
       r.style.display = match ? '' : 'none';
       if (match) n++;
     });
     if (visibleCountEl) visibleCountEl.textContent = String(n);
-    roster.classList.toggle('is-empty', n === 0 && needle.length > 0);
+    roster.classList.toggle('is-empty', n === 0 && (needle.length > 0 || cat.length > 0));
     if (filterClearBtn) {
       if (needle.length > 0) filterClearBtn.removeAttribute('hidden');
       else filterClearBtn.setAttribute('hidden', '');
@@ -531,6 +533,26 @@
     applyFilter('');
     filterInput.focus();
   };
+
+  // Category chips narrow the roster alongside the text filter.
+  document.querySelectorAll('[data-cat-chips] [data-cat]').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      if (!roster) return;
+      roster.setAttribute('data-cat', chip.getAttribute('data-cat') || '');
+      document.querySelectorAll('[data-cat-chips] [data-cat]').forEach((c) =>
+        c.setAttribute('aria-pressed', c === chip ? 'true' : 'false'));
+      applyFilter(filterInput ? filterInput.value : '');
+    });
+  });
+
+  // Whole row is a click target; real links inside keep their own behaviour.
+  rows.forEach((row) => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('a, button, input, form')) return;
+      const link = row.querySelector('[data-row-link]');
+      if (link) link.click();
+    });
+  });
 
   // ---------- URL state sync (filter + sort) ------------------
   // Mirror the filter and sort state into the URL so the view is bookmarkable
@@ -736,15 +758,22 @@
     railList.style.display = '';
     if (railMore) railMore.style.display = '';
     if (railEmpty) railEmpty.style.display = 'none';
-    railList.innerHTML = recent.map((j) => {
+    const grouped = [];
+    recent.forEach((j) => {
+      const last = grouped[grouped.length - 1];
+      if (last && last.scriptId === j.scriptId && last.status === j.status) last.count++;
+      else grouped.push(Object.assign({ count: 1 }, j));
+    });
+    railList.innerHTML = grouped.slice(0, 8).map((j) => {
       const token = STATUS_TOKEN[j.status] || 'pending';
       const label = STATUS_LABEL[j.status] || j.status.toLowerCase();
       const short = STATUS_SHORT[j.status] || '—';
       const name = escapeHtml(j.name || '(deleted)');
       const when = ago(new Date(j.date));
+      const by = escapeHtml(label + ' · ' + (j.user || 'system'));
       return `<li data-rail-iso="${escapeHtml(j.date)}">`
         + `<span class="status" data-state="${token}" title="${escapeHtml(label)}">${escapeHtml(short)}</span>`
-        + `<span class="name" title="${name}">${name}</span>`
+        + `<span class="who"><span class="name" title="${name}">${name}${j.count > 1 ? `<span class="x">×${j.count}</span>` : ''}</span><span class="by">${by}</span></span>`
         + `<span class="when">${escapeHtml(when)}</span>`
         + '</li>';
     }).join('');
@@ -816,6 +845,35 @@
     if (sortKey) applySort(sortKey, sortDir);
   };
 
+  const deckNow = document.querySelector('[data-deck-now]');
+  const updateDeck = (running, failed, completed) => {
+    if (!deckNow) return;
+    const f = failed || 0, c = completed || 0, total = f + c;
+    const set = (sel, html) => { const el = document.querySelector(sel); if (el) el.innerHTML = html; };
+    set('[data-deck-total]', total.toLocaleString());
+    const rate = total ? c / total : null;
+    set('[data-deck-rate]', rate === null ? '—' : (rate * 100).toFixed(rate >= 0.995 && rate < 1 ? 1 : 0) + '%');
+    const failedEl = document.querySelector('[data-deck-failed]');
+    if (failedEl) {
+      failedEl.classList.toggle('is-fail', f > 0);
+      failedEl.innerHTML = f > 0 ? `<a href="/Scripts/Jobs">${f}</a>` : '0';
+    }
+    const state = running ? 'running' : (f > 0 ? 'failing' : 'idle');
+    deckNow.setAttribute('data-state', state);
+    const use = deckNow.querySelector('use');
+    if (use) use.setAttribute('href', state === 'running' ? '#i-bolt' : state === 'failing' ? '#i-alert' : '#i-check');
+    if (state === 'running') {
+      set('[data-deck-title]', `<a href="/PowerShell/Details/${encodeURIComponent(running.scriptId)}">${escapeHtml(running.name || 'A script')} is running</a>`);
+      set('[data-deck-sub]', `started by ${escapeHtml(running.user || 'system')} · ${escapeHtml(ago(new Date(running.date)))}`);
+    } else if (state === 'failing') {
+      set('[data-deck-title]', `${f} ${f === 1 ? 'failure' : 'failures'} in 24h`);
+      set('[data-deck-sub]', 'check the audit log for details');
+    } else {
+      set('[data-deck-title]', 'All systems nominal');
+      set('[data-deck-sub]', 'nothing running, no failures in the last 24h');
+    }
+  };
+
   const updateSummary = (failed, completed) => {
     const total = (failed || 0) + (completed || 0);
     if (summaryJobsBlock) summaryJobsBlock.style.display = total > 0 ? '' : 'none';
@@ -854,6 +912,7 @@
       updateRowStatuses(data.running, data.recent);
       updateRail(data.recent);
       updateSummary(data.failed24h, data.completed24h);
+      updateDeck(data.running, data.failed24h, data.completed24h);
     } catch (_) {
       // network blip — try again next tick.
     } finally {
@@ -1491,12 +1550,12 @@
       if (!btn) return;
       let armed = false;
       let armTimer = null;
-      if (!btn.dataset.originalLabel) btn.dataset.originalLabel = btn.textContent.trim();
+      const originalHtml = btn.innerHTML;
       const armedLabel = btn.dataset.armedLabel || 'confirm';
       const disarm = () => {
         armed = false;
         btn.removeAttribute('data-armed');
-        btn.textContent = btn.dataset.originalLabel;
+        btn.innerHTML = originalHtml;
         clearTimeout(armTimer);
       };
       form.addEventListener('submit', (e) => {

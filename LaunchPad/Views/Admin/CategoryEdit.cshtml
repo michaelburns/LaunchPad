@@ -22,8 +22,8 @@
     .author__row { display: grid; grid-template-columns: 180px 1fr; gap: var(--s-md); align-items: baseline; }
     .author__row label {
         font-size: var(--t-meta);
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
+        text-transform: none;
+        letter-spacing: 0;
         color: var(--fg-2);
         margin: 0;
     }
@@ -46,7 +46,7 @@
         padding: var(--s-sm) var(--s-md);
         background: color-mix(in oklab, var(--fail) 8%, var(--bg-1));
         border: 1px solid color-mix(in oklab, var(--fail) 45%, var(--rule-strong));
-        border-radius: 4px;
+        border-radius: var(--r-lg);
         margin-bottom: var(--s-md);
     }
 
@@ -61,7 +61,7 @@
             <h1>@Model.Category.Name</h1>
             <span class="meta">edit category</span>
         </div>
-        <a class="ghost" asp-action="CategoryList">cancel</a>
+        <a class="ghost" asp-action="CategoryList">Cancel</a>
     </header>
 
     <form asp-action="CategoryEdit" method="post" class="author__form" data-author-form>
@@ -78,8 +78,8 @@
         </div>
 
         <div class="author__actions">
-            <button type="submit" class="btn btn-primary">save changes</button>
-            <a class="ghost" asp-action="CategoryList">cancel</a>
+            <button type="submit" class="btn btn-primary"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Save changes</button>
+            <a class="ghost" asp-action="CategoryList">Cancel</a>
         </div>
     </form>
 </section>
