@@ -96,7 +96,13 @@ app.Use(async (context, next) =>
     {
         buffer.Seek(0, System.IO.SeekOrigin.Begin);
         var html = await new System.IO.StreamReader(buffer, System.Text.Encoding.UTF8).ReadToEndAsync();
-        var inject = "<link rel=\"stylesheet\" href=\"/css/hangfire-dark.css\">";
+        // Hangfire picks its chart palette from prefers-color-scheme; LaunchPad is always dark,
+        // so answer that one query with "dark" before Hangfire's script reads it.
+        var inject = "<link rel=\"stylesheet\" href=\"/css/hangfire-dark.css\">"
+                   + "<script>(function(){var m=window.matchMedia;window.matchMedia=function(q){"
+                   + "if(/prefers-color-scheme:\\s*dark/.test(q)){var r=m.call(window,q);"
+                   + "return{matches:true,media:q,addEventListener:function(){},removeEventListener:function(){},addListener:function(){},removeListener:function(){}};}"
+                   + "return m.call(window,q);};})();</script>";
         var idx = html.LastIndexOf("</head>", System.StringComparison.OrdinalIgnoreCase);
         if (idx >= 0) html = html.Substring(0, idx) + inject + html.Substring(idx);
         var bytes = System.Text.Encoding.UTF8.GetBytes(html);
@@ -110,7 +116,10 @@ app.Use(async (context, next) =>
     }
 });
 
-app.UseHangfireDashboard("/Scripts/Jobs");
+app.UseHangfireDashboard("/Scripts/Jobs", new DashboardOptions
+{
+    Authorization = new[] { new HangfireDashboardAuthFilter() }
+});
 
 LaunchPad.Services.HangfireServiceLocator.ServiceProvider = app.Services;
 

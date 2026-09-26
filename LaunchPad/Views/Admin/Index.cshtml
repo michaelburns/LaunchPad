@@ -1,3 +1,5 @@
+@using LaunchPad.Models
+@using LaunchPad.Controllers
 @{
     ViewData["Title"] = "Access";
     int users      = ViewBag.UserCount       ?? 0;
@@ -7,156 +9,244 @@
     int orphanUsers = ViewBag.UsersWithoutRoles ?? 0;
     int emptyCats   = ViewBag.EmptyCategories   ?? 0;
     bool hasAnomalies = orphanUsers > 0 || emptyCats > 0;
+    var matrixUsers = (List<User>)ViewBag.MatrixUsers ?? new List<User>();
+    var matrixCats  = (List<CategoryCount>)ViewBag.MatrixCategories ?? new List<CategoryCount>();
+
+    string initials(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return "?";
+        var last = name.Split('\\').Last();
+        var parts = last.Split(new[] { ' ', '.', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
+        return new string(parts.Select(p => char.ToUpperInvariant(p[0])).Take(2).ToArray());
+    }
 }
 
 <style>
-    .admin-home { display: grid; grid-template-columns: 1fr; gap: var(--s-xl); max-width: 960px; }
+    .access { display: flex; flex-direction: column; gap: var(--s-lg); }
 
-    .admin-home__head {
-        display: flex; align-items: flex-end; justify-content: space-between;
-        gap: var(--s-md); padding-bottom: var(--s-md); border-bottom: 1px solid var(--rule);
-    }
-    .admin-home__title { display: flex; align-items: baseline; gap: var(--s-md); flex-wrap: wrap; }
-    .admin-home__title h1 { font-size: var(--t-h2); letter-spacing: -0.022em; }
-    .admin-home__title .meta {
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono-tight);
-        font-size: var(--t-meta);
-        color: var(--fg-3);
-        letter-spacing: 0;
-    }
-    .admin-home__title .meta a {
-        color: var(--fg-2);
-        border-bottom: 1px dotted var(--rule-strong);
-    }
-    .admin-home__title .meta a:hover { color: var(--accent); border-bottom-color: var(--accent); }
-
-    .admin-cards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-lg); }
-    @@media (max-width: 720px) { .admin-cards { grid-template-columns: 1fr; } }
-
-    .admin-card {
-        background: var(--bg-1);
-        border: 1px solid var(--rule);
-        border-radius: 4px;
-        padding: var(--s-lg);
-        display: flex;
-        flex-direction: column;
-        gap: var(--s-sm);
-        text-decoration: none;
-        color: inherit;
-        transition: border-color 100ms linear, background 100ms linear;
-    }
-    .admin-card:hover {
-        border-color: var(--rule-strong);
-        background: color-mix(in oklab, var(--accent) 4%, var(--bg-1));
-    }
-    .admin-card:hover .admin-card__name { color: var(--accent); }
-
-    .admin-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-sm); }
-    .admin-card__name {
-        font-size: var(--t-lead);
-        font-weight: 600;
-        color: var(--fg-0);
-        letter-spacing: -0.018em;
-    }
-    .admin-card__count {
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono-tight);
-        font-size: var(--t-h3);
-        color: var(--fg-0);
-        letter-spacing: 0;
-        font-variant-numeric: tabular-nums;
-    }
-    .admin-card__sub {
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono-tight);
-        font-size: var(--t-meta);
-        color: var(--fg-3);
-        letter-spacing: 0;
-    }
-
-    /* Anomaly strip — shown only when something has drifted. Silence is feedback. */
-    .anomalies {
+    .notices { display: flex; flex-direction: column; gap: var(--s-xs); }
+    .notice {
         display: flex;
         align-items: center;
-        flex-wrap: wrap;
-        gap: var(--s-md);
-        padding: var(--s-sm) var(--s-md);
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono-tight);
-        font-size: var(--t-meta);
+        gap: 0.75rem;
+        padding: 0.7rem var(--s-md);
+        border-radius: var(--r-md);
+        background: color-mix(in oklab, var(--warn) 7%, var(--bg-1));
+        box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--warn) 25%, var(--rule));
+        font-size: var(--t-ui);
+        color: var(--fg-1);
+    }
+    .notice .i { color: var(--warn); }
+    .notice a { margin-left: auto; font-size: var(--t-meta); color: var(--fg-1); border: none; display: inline-flex; align-items: center; gap: 0.25em; }
+    .notice a:hover { color: var(--fg-0); }
+
+    .overview {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+    .overview > a {
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+        padding: var(--s-md) var(--s-lg);
+        border: none;
+        color: var(--fg-1);
+        transition: background var(--dur-fast) linear;
+    }
+    .overview > a + a { border-left: 1px solid var(--rule); }
+    @@media (max-width: 700px) { .overview > a + a { border-left: none; border-top: 1px solid var(--rule); } }
+    .overview > a:hover { background: var(--bg-2); color: var(--fg-0); }
+    .overview .glyph {
+        display: grid; place-items: center;
+        width: 36px; height: 36px;
+        border-radius: 10px;
+        background: var(--bg-2);
+        box-shadow: inset 0 0 0 1px var(--rule);
         color: var(--fg-2);
-        background: var(--bg-1);
-        border: 1px solid var(--rule);
-        border-left: 1px solid var(--warn);
-        border-radius: 4px;
-        letter-spacing: 0;
     }
-    .anomalies__label {
+    .overview b { display: block; font-family: var(--mono); font-variation-settings: var(--rec-mono-tight); font-size: var(--t-lead); color: var(--fg-0); font-weight: 500; line-height: 1.2; }
+    .overview small { font-size: var(--t-meta); color: var(--fg-2); }
+    .overview .go { margin-left: auto; color: var(--fg-3); }
+
+    .matrix-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-md); flex-wrap: wrap; }
+    .matrix-head h2 { font-size: var(--t-body); font-weight: 600; letter-spacing: -0.01em; }
+    .matrix-head p { font-size: var(--t-meta); color: var(--fg-2); }
+    .matrix-scroll { overflow-x: auto; }
+    .matrix { width: 100%; min-width: 560px; }
+    .matrix th, .matrix td { padding: 0.75rem var(--s-md); border-bottom: 1px solid var(--rule); }
+    .matrix thead th {
         font-size: var(--t-micro);
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        color: var(--warn);
-        flex: 0 0 auto;
+        color: var(--fg-3);
+        font-weight: 550;
+        background: color-mix(in oklab, var(--bg-2) 40%, transparent);
+        vertical-align: bottom;
     }
-    .anomalies__item { color: var(--fg-1); }
-    .anomalies__item a { color: inherit; border-bottom: 1px dotted var(--rule-strong); }
-    .anomalies__item a:hover { color: var(--warn); border-bottom-color: var(--warn); }
-    .anomalies__sep { color: var(--fg-3); padding: 0 0.1em; }
+    .matrix thead th.cat { text-align: center; min-width: 110px; }
+    .matrix thead th.cat a { display: block; color: var(--fg-1); font-size: var(--t-meta); font-weight: 600; border: none; }
+    .matrix thead th.cat a:hover { color: var(--accent); }
+    .matrix thead th.cat span { font-family: var(--mono); font-variation-settings: var(--rec-mono-tight); font-weight: 400; }
+    .matrix tbody tr { cursor: pointer; }
+    .matrix tbody tr:last-child td { border-bottom: none; }
+    .matrix td.cell { text-align: center; }
+    .matrix .who { display: flex; align-items: center; gap: 0.75rem; }
+    .matrix .who a { font-weight: 600; color: var(--fg-0); border: none; }
+    .matrix .roles { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 0.2rem; }
+    .role {
+        display: inline-flex; align-items: center;
+        height: 20px; padding: 0 0.5em;
+        border-radius: 5px;
+        font-size: 0.6875rem;
+        font-weight: 550;
+        background: var(--bg-2);
+        color: var(--fg-2);
+        box-shadow: inset 0 0 0 1px var(--rule);
+    }
+    .role[data-role="administrator"] { color: var(--accent); background: color-mix(in oklab, var(--accent) 10%, var(--bg-1)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 30%, transparent); }
+    .role[data-role="author"] { color: color-mix(in oklab, var(--info) 80%, var(--fg-0)); }
+    .role.is-none { color: var(--warn); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--warn) 35%, transparent); }
+    .grant {
+        display: inline-grid; place-items: center;
+        width: 24px; height: 24px;
+        border-radius: 7px;
+    }
+    .grant.yes { background: color-mix(in oklab, var(--ok) 14%, var(--bg-2)); color: var(--ok); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ok) 30%, transparent); }
+    .grant.no { color: var(--fg-3); }
+    .grant.no::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--bg-3); }
+    .grant .i { width: 14px; height: 14px; stroke-width: 2.5; }
+
+    .matrix .avatar::after { display: none; }
+    .matrix-empty { padding: var(--s-xl) var(--s-lg); color: var(--fg-2); font-size: var(--t-ui); }
 </style>
 
-<section class="admin-home">
-    <header class="admin-home__head">
-        <div class="admin-home__title">
-            <h1>access</h1>
-            <span class="meta">
-                manage who can run what · <a data-shortcuts-open="concepts">how access works ›</a>
-            </span>
+<section class="access">
+    <header class="page-head" style="margin-bottom:0">
+        <div class="page-head__title">
+            <h1>Access</h1>
+            <span class="meta">Who can run what. Roles decide <em>what</em> someone can do; categories decide <em>which scripts</em>.</span>
+        </div>
+        <div class="page-head__actions">
+            <a class="btn" asp-action="CategoryCreate"><svg class="i" aria-hidden="true"><use href="#i-folder"/></svg>New category</a>
+            <a class="btn" asp-action="UserCreate"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>New user</a>
         </div>
     </header>
 
     @if (hasAnomalies)
     {
-        <div class="anomalies">
-            <span class="anomalies__label">drift</span>
+        <div class="notices" role="status">
             @if (orphanUsers > 0)
             {
-                <span class="anomalies__item">
-                    <a asp-action="UserList"><span data-numeric>@orphanUsers</span> @(orphanUsers == 1 ? "user has" : "users have") no roles</a>
-                </span>
-            }
-            @if (orphanUsers > 0 && emptyCats > 0)
-            {
-                <span class="anomalies__sep">·</span>
+                <div class="notice">
+                    <svg class="i" aria-hidden="true"><use href="#i-alert"/></svg>
+                    <span><span data-numeric>@orphanUsers</span> @(orphanUsers == 1 ? "user has" : "users have") no roles and can't do anything yet.</span>
+                    <a asp-action="UserList">Review users<svg class="i i--sm" aria-hidden="true"><use href="#i-chevron"/></svg></a>
+                </div>
             }
             @if (emptyCats > 0)
             {
-                <span class="anomalies__item">
-                    <a asp-action="CategoryList"><span data-numeric>@emptyCats</span> @(emptyCats == 1 ? "category has" : "categories have") no scripts</a>
-                </span>
+                <div class="notice">
+                    <svg class="i" aria-hidden="true"><use href="#i-alert"/></svg>
+                    <span><span data-numeric>@emptyCats</span> @(emptyCats == 1 ? "category has" : "categories have") no scripts, so granting it does nothing.</span>
+                    <a asp-action="CategoryList">Review categories<svg class="i i--sm" aria-hidden="true"><use href="#i-chevron"/></svg></a>
+                </div>
             }
         </div>
     }
 
-    <div class="admin-cards">
-        <a class="admin-card" asp-action="UserList">
-            <div class="admin-card__head">
-                <span class="admin-card__name">users</span>
-                <span class="admin-card__count" data-numeric>@users</span>
-            </div>
-            <div class="admin-card__sub">
-                <span data-numeric>@admins</span> @(admins == 1 ? "administrator" : "administrators")
-            </div>
+    <nav class="overview surface" aria-label="Access areas">
+        <a asp-action="UserList">
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-users"/></svg></span>
+            <span><b data-numeric>@users</b><small>@(users == 1 ? "user" : "users") · @admins @(admins == 1 ? "admin" : "admins")</small></span>
+            <svg class="i go" aria-hidden="true"><use href="#i-chevron"/></svg>
         </a>
+        <a asp-action="CategoryList">
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-folder"/></svg></span>
+            <span><b data-numeric>@categories</b><small>@(categories == 1 ? "category" : "categories")</small></span>
+            <svg class="i go" aria-hidden="true"><use href="#i-chevron"/></svg>
+        </a>
+        <a href="/">
+            <span class="glyph" aria-hidden="true"><svg class="i"><use href="#i-scripts"/></svg></span>
+            <span><b data-numeric>@scripts</b><small>@(scripts == 1 ? "script" : "scripts") in total</small></span>
+            <svg class="i go" aria-hidden="true"><use href="#i-chevron"/></svg>
+        </a>
+    </nav>
 
-        <a class="admin-card" asp-action="CategoryList">
-            <div class="admin-card__head">
-                <span class="admin-card__name">categories</span>
-                <span class="admin-card__count" data-numeric>@categories</span>
-            </div>
-            <div class="admin-card__sub">
-                <span data-numeric>@scripts</span> @(scripts == 1 ? "script" : "scripts") across all categories
-            </div>
-        </a>
+    <div class="matrix-head">
+        <h2>Access matrix</h2>
+        <p>A check means the user can see and run that category's scripts, given the right role.</p>
+    </div>
+    <div class="surface matrix-scroll">
+        @if (!matrixUsers.Any())
+        {
+            <div class="matrix-empty">No users yet. <a asp-action="UserCreate">Add the first one</a>.</div>
+        }
+        else
+        {
+            <table class="matrix">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        @foreach (var c in matrixCats)
+                        {
+                            <th class="cat">
+                                <a asp-action="CategoryEdit" asp-route-id="@c.Id">@c.Name</a>
+                                <span>@c.Scripts @(c.Scripts == 1 ? "script" : "scripts")</span>
+                            </th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var u in matrixUsers)
+                    {
+                        var granted = (u.Categories ?? Enumerable.Empty<UserCategory>()).Select(x => x.CategoryId).ToHashSet();
+                        var roles = (u.UserRoles ?? Enumerable.Empty<UserRole>()).Select(r => r.Role?.Name).Where(n => n != null).OrderBy(n => n).ToList();
+                        <tr data-href="@Url.Action("UserEdit", new { id = u.Id })">
+                            <td>
+                                <div class="who">
+                                    <span class="avatar" aria-hidden="true">@initials(u.Username)</span>
+                                    <div>
+                                        <a asp-action="UserEdit" asp-route-id="@u.Id">@u.Username</a>
+                                        <div class="roles">
+                                            @if (!roles.Any())
+                                            {
+                                                <span class="role is-none">no roles</span>
+                                            }
+                                            @foreach (var r in roles)
+                                            {
+                                                <span class="role" data-role="@r.ToLowerInvariant()">@r</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            @foreach (var c in matrixCats)
+                            {
+                                var has = granted.Contains(c.Id);
+                                <td class="cell">
+                                    @if (has)
+                                    {
+                                        <span class="grant yes" title="@u.Username can access @c.Name"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span class="sr-only">granted</span></span>
+                                    }
+                                    else
+                                    {
+                                        <span class="grant no" title="@u.Username has no access to @c.Name"><span class="sr-only">not granted</span></span>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
     </div>
 </section>
+
+@section Scripts {
+    <script>
+        document.querySelectorAll('.matrix tbody tr[data-href]').forEach(function (tr) {
+            tr.addEventListener('click', function (e) {
+                if (e.target.closest('a')) return;
+                window.location.href = tr.getAttribute('data-href');
+            });
+        });
+    </script>
+}

@@ -28,7 +28,7 @@
         border: 1px solid var(--rule);
         background: var(--bg-1);
         padding: 0.3em 0.7em;
-        border-radius: 4px;
+        border-radius: var(--r-lg);
         text-decoration: none;
     }
     .add-btn:hover { color: var(--fg-0); border-color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, var(--bg-1)); }
@@ -39,7 +39,7 @@
         font-size: var(--t-meta);
         padding: var(--s-sm) var(--s-md);
         border: 1px solid var(--rule);
-        border-radius: 4px;
+        border-radius: var(--r-lg);
         background: var(--bg-1);
         color: var(--fg-1);
     }
@@ -94,7 +94,7 @@
         font-size: var(--t-meta);
         padding: 0.05em 0.45em;
         margin: 0 0.2em 0.2em 0;
-        border-radius: 3px;
+        border-radius: var(--r-sm);
         background: var(--bg-2);
         color: var(--fg-1);
         border: 1px solid var(--rule);
@@ -111,7 +111,7 @@
         text-align: left;
         color: var(--fg-2);
         border: 1px dashed var(--rule-strong);
-        border-radius: 4px;
+        border-radius: var(--r-lg);
         font-family: var(--mono);
         font-variation-settings: var(--rec-mono);
     }
@@ -121,10 +121,10 @@
 <section class="admin-list">
     <header class="admin-list__head">
         <div class="admin-list__title">
-            <h1>users</h1>
+            <h1>Users</h1>
             <span class="meta">@Model.Count() @(Model.Count() == 1 ? "user" : "users")</span>
         </div>
-        <a class="add-btn" asp-action="UserCreate">+ new user</a>
+        <a class="btn" asp-action="UserCreate"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>New user</a>
     </header>
 
     @if (TempData["AdminNotice"] is string okMsg)
@@ -138,6 +138,7 @@
 
     @if (Model.Any())
     {
+        <div class="list-frame">
         <table class="roster">
             <thead>
                 <tr>
@@ -187,6 +188,7 @@
                 }
             </tbody>
         </table>
+        </div>
     }
     else
     {

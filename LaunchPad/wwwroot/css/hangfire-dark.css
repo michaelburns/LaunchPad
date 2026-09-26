@@ -8,22 +8,22 @@
    ============================================================ */
 
 :root {
-  --hd-bg-0: oklch(11% 0.014 260);
-  --hd-bg-1: oklch(17% 0.014 260);
-  --hd-bg-2: oklch(23% 0.015 260);
-  --hd-bg-3: oklch(30% 0.017 260);
-  --hd-fg-0: oklch(97% 0.008 80);
-  --hd-fg-1: oklch(86% 0.009 80);
-  --hd-fg-2: oklch(66% 0.011 80);
-  --hd-fg-3: oklch(56% 0.012 260);
-  --hd-rule: oklch(30% 0.014 260);
-  --hd-rule-strong: oklch(42% 0.016 260);
-  --hd-accent: oklch(74% 0.155 60);
+  --hd-bg-0: oklch(12.5% 0.012 262);
+  --hd-bg-1: oklch(16.5% 0.013 262);
+  --hd-bg-2: oklch(21% 0.014 262);
+  --hd-bg-3: oklch(26% 0.016 262);
+  --hd-fg-0: oklch(96.5% 0.006 85);
+  --hd-fg-1: oklch(84% 0.008 85);
+  --hd-fg-2: oklch(68% 0.010 260);
+  --hd-fg-3: oklch(58% 0.012 262);
+  --hd-rule: oklch(26% 0.014 262);
+  --hd-rule-strong: oklch(34% 0.016 262);
+  --hd-accent: oklch(76% 0.155 62);
   --hd-accent-deep: oklch(58% 0.150 50);
-  --hd-fail: oklch(62% 0.180 25);
-  --hd-ok:   oklch(68% 0.130 145);
-  --hd-warn: oklch(76% 0.130 80);
-  --hd-info: oklch(66% 0.090 220);
+  --hd-fail: oklch(65% 0.190 25);
+  --hd-ok:   oklch(72% 0.140 152);
+  --hd-warn: oklch(79% 0.130 85);
+  --hd-info: oklch(70% 0.100 235);
   color-scheme: dark;
 }
 
@@ -336,3 +336,25 @@ pre { padding: 12px !important; }
 
 /* Box-shadow softeners */
 .shadow, .well-sm, .well-lg { box-shadow: none !important; }
+
+
+/* ---------- LaunchPad v2 shell alignment ------------------- */
+html, body { font-family: "Recursive", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif !important; font-variation-settings: "MONO" 0; -webkit-font-smoothing: antialiased; }
+.navbar { min-height: 52px !important; backdrop-filter: blur(10px); }
+.navbar-default .navbar-brand { font-weight: 650; letter-spacing: -0.01em; display: inline-flex !important; align-items: center; gap: 10px; }
+.navbar-default .navbar-brand::before {
+  content: "";
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  background: var(--hd-accent);
+  box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.35), 0 0 0 1px oklch(0% 0 0 / 0.3);
+}
+.navbar-default .navbar-nav > li > a { border-radius: 7px; margin: 9px 2px; padding: 6px 10px !important; }
+.navbar .badge, .navbar .label { background: var(--hd-bg-3) !important; color: var(--hd-fg-1) !important; border-radius: 999px; }
+h1.page-header { font-weight: 650; letter-spacing: -0.024em; border-bottom-color: var(--hd-rule) !important; }
+#footer, #footer .container, .footer { background: var(--hd-bg-1) !important; border-top: 1px solid var(--hd-rule) !important; color: var(--hd-fg-3) !important; }
+#footer a { color: var(--hd-fg-2) !important; }
+.panel, .table, .list-group-item, .well { border-radius: 10px; }
+.btn { border-radius: 7px !important; }
+.js-jobs-list-row:hover td, .table-hover > tbody > tr:hover > td { background: var(--hd-bg-2) !important; }
+canvas { filter: saturate(1.1); }

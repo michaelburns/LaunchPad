@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using LaunchPad.Data;
 using LaunchPad.Models;
@@ -32,7 +33,7 @@ namespace LaunchPad.Controllers
                 .Where(j => j.Date >= since)
                 .Where(j => j.Script != null && !j.Script.Name.StartsWith("_"))
                 .OrderByDescending(j => j.Id)
-                .Take(8)
+                .Take(24)
                 .ToList();
 
             var running = _scripts.GetJobs()
@@ -41,11 +42,59 @@ namespace LaunchPad.Controllers
                 .OrderByDescending(j => j.Id)
                 .FirstOrDefault();
 
+            // Telemetry for the home deck: a 14-day activity series plus per-script
+            // run history ("runway lights") and success rates. Projected to the three
+            // columns we need so a busy recurring script doesn't drag Outcome blobs along.
+            var visibleIds = visibleScripts.Select(s => s.Id).ToHashSet();
+            var since14d = DateTime.Today.AddDays(-13);
+            var window = _scripts.GetJobs()
+                .Where(j => j.Date >= since14d && visibleIds.Contains(j.ScriptId))
+                .Select(j => new { j.ScriptId, j.Date, j.Status })
+                .ToList();
+
+            var days = Enumerable.Range(0, 14).Select(i => since14d.AddDays(i)).ToList();
+            ViewBag.Activity = days.Select(d => new ActivityDay
+            {
+                Day       = d,
+                Completed = window.Count(j => j.Date.Date == d && j.Status == Status.Completed),
+                Failed    = window.Count(j => j.Date.Date == d && j.Status == Status.Failed),
+                Other     = window.Count(j => j.Date.Date == d && j.Status != Status.Completed && j.Status != Status.Failed)
+            }).ToList();
+
+            var history = new Dictionary<int, List<Status>>();
+            var rates = new Dictionary<int, (int ok, int total)>();
+            foreach (var id in visibleIds)
+            {
+                history[id] = _scripts.GetJobs()
+                    .Where(j => j.ScriptId == id && j.Status != Status.Recurring && j.Status != Status.Scheduled)
+                    .OrderByDescending(j => j.Id)
+                    .Take(24)
+                    .Select(j => j.Status)
+                    .ToList();
+                var finished = history[id].Where(s => s == Status.Completed || s == Status.Failed).ToList();
+                rates[id] = (finished.Count(s => s == Status.Completed), finished.Count);
+            }
+            ViewBag.RunHistory = history;
+            ViewBag.LastRunDates = _scripts.GetJobs()
+                .Where(j => visibleIds.Contains(j.ScriptId) && j.Status != Status.Recurring && j.Status != Status.Scheduled)
+                .GroupBy(j => j.ScriptId)
+                .Select(g => new { g.Key, Last = g.Max(j => j.Date) })
+                .ToDictionary(x => x.Key, x => x.Last);
+            ViewBag.SuccessRates = rates;
+
+            var since24 = DateTime.Now.AddHours(-24);
+            var last24 = window.Where(j => j.Date >= since24).ToList();
+
             ViewBag.Scripts = visibleScripts;
             ViewBag.RecentJobs = recentJobs;
             ViewBag.RunningJob = running;
-            ViewBag.FailedCount24h = recentJobs.Count(j => j.Status == Status.Failed);
-            ViewBag.CompletedCount24h = recentJobs.Count(j => j.Status == Status.Completed);
+            ViewBag.FailedCount24h = last24.Count(j => j.Status == Status.Failed);
+            ViewBag.CompletedCount24h = last24.Count(j => j.Status == Status.Completed);
+            ViewBag.NextRecurring = _scripts.GetJobs()
+                .Include(j => j.Script)
+                .Where(j => j.Status == Status.Recurring && visibleIds.Contains(j.ScriptId))
+                .OrderByDescending(j => j.Id)
+                .FirstOrDefault();
 
             return View();
         }
@@ -136,20 +185,25 @@ namespace LaunchPad.Controllers
                 .Where(j => j.Script != null && j.Script.Category != null && categoryIds.Contains(j.Script.Category.Id))
                 .Where(j => !j.Script.Name.StartsWith("_")) // hide ad-hoc + sentinel scripts from rail
                 .OrderByDescending(j => j.Id)
-                .Take(8)
+                .Take(40)
                 .Select(j => new
                 {
                     id        = j.Id,
                     scriptId  = j.ScriptId,
                     name      = j.Script != null ? j.Script.Name : "(deleted)",
                     status    = j.Status.ToString(),
+                    user      = j.UserName,
                     date      = j.Date
                 })
                 .ToList();
 
             var running = recent.FirstOrDefault(j => j.status == "Running" || j.status == "Started");
-            var failed  = recent.Count(j => j.status == "Failed");
-            var done    = recent.Count(j => j.status == "Completed");
+            var window24 = _scripts.GetJobs()
+                .Where(j => j.Date >= since)
+                .Where(j => j.Script != null && j.Script.Category != null && categoryIds.Contains(j.Script.Category.Id))
+                .Where(j => !j.Script.Name.StartsWith("_"));
+            var failed  = window24.Count(j => j.Status == Status.Failed);
+            var done    = window24.Count(j => j.Status == Status.Completed);
 
             return Json(new
             {
@@ -160,5 +214,14 @@ namespace LaunchPad.Controllers
                 serverTime   = DateTime.Now
             });
         }
+    }
+
+    public class ActivityDay
+    {
+        public DateTime Day { get; set; }
+        public int Completed { get; set; }
+        public int Failed { get; set; }
+        public int Other { get; set; }
+        public int Total => Completed + Failed + Other;
     }
 }

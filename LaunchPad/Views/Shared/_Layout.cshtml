@@ -3,6 +3,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @inject IAuthorizationService AuthorizationService
+@inject Microsoft.Extensions.Configuration.IConfiguration Config
 @inject IScriptRepository ScriptRepository
 @{
     var path = (Context.Request.Path.Value ?? "/").ToLowerInvariant();
@@ -17,6 +18,8 @@
         _                                                                           => "scripts"
     };
     var crumb = path == "/" ? "/" : path.TrimEnd('/');
+    var initials = signed == "—" ? "?" : new string(signed.Split('\\').Last().Split(new[] { ' ', '.', '_', '-', '\\' }, StringSplitOptions.RemoveEmptyEntries)
+        .Select(p => char.ToUpperInvariant(p[0])).Take(2).ToArray());
 
     // Running-job dock — small, cheap query so every page can show "what's running right now."
     Job runningJob = ScriptRepository.GetJobs()
@@ -49,11 +52,15 @@
 </head>
 <body data-running="@(runningJob != null ? "true" : "false")" data-admin="@(isAdmin ? "true" : "false")">
 
+@await Html.PartialAsync("_Icons")
 <div class="app">
 
     <header class="topbar" role="banner">
         <a class="brand" href="/" aria-label="LaunchPad — home">
-            <span class="brace brace--l">{</span><span class="name">launch-pad</span><span class="brace brace--r">}</span>
+            <span class="brand__mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="m7 8 4 4-4 4"/><path d="M13 16.5h4.5"/></svg>
+            </span>
+            <span class="brand__word"><span class="brace brace--l">{</span><span class="name">launch-pad</span><span class="brace brace--r">}</span></span>
         </a>
         @if (path != "/")
         {
@@ -66,11 +73,9 @@
         <span class="topbar__spacer"></span>
 
         <button type="button" class="topbar__cmd" data-palette-open aria-label="Open command palette (⌘K)" title="Open command palette (⌘K)">
-            <span aria-hidden="true" data-kbd-cmd>⌘K</span>
-        </button>
-
-        <button type="button" class="topbar__help" data-shortcuts-toggle aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">
-            <span aria-hidden="true">?</span>
+            <svg class="i" aria-hidden="true"><use href="#i-search"/></svg>
+            <span class="topbar__cmd-label">Search or run a command</span>
+            <kbd aria-hidden="true" data-kbd-cmd>⌘K</kbd>
         </button>
 
         <a class="topbar__now" data-running-dock
@@ -82,9 +87,13 @@
             <span class="ago" data-running-iso="@(runningJob != null ? runningJob.Date.ToString("o") : "")">@(runningJob != null ? ago(runningJob.Date) : "")</span>
         </a>
 
-        <span class="topbar__user" title="Signed in">
-            <span class="dot" aria-hidden="true"></span>
-            <span>@signed</span>
+        <button type="button" class="topbar__icon" data-shortcuts-toggle aria-label="Keyboard shortcuts and concepts" title="Shortcuts (?)">
+            <svg class="i" aria-hidden="true"><use href="#i-help"/></svg>
+        </button>
+
+        <span class="topbar__user" title="Signed in as @signed">
+            <span class="avatar" aria-hidden="true">@initials</span>
+            <span class="topbar__user-name">@signed</span>
         </span>
     </header>
 
@@ -93,15 +102,17 @@
             <span class="sidebar__group-label">Operate</span>
             <ul class="nav">
                 <li>
-                    <a class="@(scriptsActive ? "nav__item is-active" : "nav__item")" href="/">
-                        <span class="glyph" aria-hidden="true">›_</span>
+                    <a class="@(scriptsActive ? "nav__item is-active" : "nav__item")" href="/" @(scriptsActive ? "aria-current=page" : "")>
+                        <svg class="i" aria-hidden="true"><use href="#i-scripts"/></svg>
                         <span class="label">Scripts</span>
+                        <kbd class="nav__kbd" aria-hidden="true">g h</kbd>
                     </a>
                 </li>
                 <li>
                     <a class="@navClass("/scripts/jobs")" href="/Scripts/Jobs">
-                        <span class="glyph" aria-hidden="true">⌗</span>
+                        <svg class="i" aria-hidden="true"><use href="#i-audit"/></svg>
                         <span class="label">Audit</span>
+                        <kbd class="nav__kbd" aria-hidden="true">g a</kbd>
                     </a>
                 </li>
             </ul>
@@ -109,18 +120,42 @@
 
         @if (isAdmin)
         {
-            <div class="sidebar__group sidebar__group--admin">
+            <div class="sidebar__group">
                 <span class="sidebar__group-label">Govern</span>
                 <ul class="nav">
                     <li>
-                        <a class="@navClass("/admin")" href="/Admin">
-                            <span class="glyph" aria-hidden="true">@@</span>
+                        <a class="@(path == "/admin" || path == "/admin/index" ? "nav__item is-active" : "nav__item")" href="/Admin">
+                            <svg class="i" aria-hidden="true"><use href="#i-shield"/></svg>
                             <span class="label">Access</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a class="@(path.StartsWith("/admin/user") ? "nav__item is-active" : "nav__item")" href="/Admin/UserList">
+                            <svg class="i" aria-hidden="true"><use href="#i-users"/></svg>
+                            <span class="label">Users</span>
+                            <kbd class="nav__kbd" aria-hidden="true">g u</kbd>
+                        </a>
+                    </li>
+                    <li>
+                        <a class="@(path.StartsWith("/admin/categor") ? "nav__item is-active" : "nav__item")" href="/Admin/CategoryList">
+                            <svg class="i" aria-hidden="true"><use href="#i-folder"/></svg>
+                            <span class="label">Categories</span>
+                            <kbd class="nav__kbd" aria-hidden="true">g c</kbd>
                         </a>
                     </li>
                 </ul>
             </div>
         }
+
+        <div class="sidebar__foot">
+            <div class="host" title="Scripts execute on this host">
+                <svg class="i" aria-hidden="true"><use href="#i-server"/></svg>
+                <span class="host__text">
+                    <span class="host__name">@(Config["LaunchPad:HostLabel"] ?? Environment.MachineName)</span>
+                    <span class="host__meta"><span class="host__dot" aria-hidden="true"></span>worker online · pwsh 7</span>
+                </span>
+            </div>
+        </div>
     </aside>
 
     <main class="main" id="main">

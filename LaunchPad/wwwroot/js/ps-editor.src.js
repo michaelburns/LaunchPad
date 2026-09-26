@@ -4,6 +4,8 @@
 // the DOM (form submission carries its value); we mirror CM's doc into it on every change.
 
 import { basicSetup, EditorView } from "codemirror";
+import { EditorState } from "@codemirror/state";
+import { lineNumbers } from "@codemirror/view";
 import { keymap } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
 import { StreamLanguage, syntaxHighlighting, HighlightStyle } from "@codemirror/language";
@@ -13,12 +15,13 @@ import { tags } from "@lezer/highlight";
 const lpTheme = EditorView.theme({
   "&": {
     color: "var(--fg-0)",
-    backgroundColor: "oklch(8% 0.012 260)",
+    backgroundColor: "var(--bg-sunk)",
     fontFamily: "var(--mono)",
     fontVariationSettings: "var(--rec-mono)",
     fontSize: "var(--t-ui)",
     border: "1px solid var(--rule)",
-    borderRadius: "4px",
+    borderRadius: "var(--r-lg)",
+    overflow: "hidden",
     minHeight: "420px",
   },
   "&.cm-focused": {
@@ -41,7 +44,7 @@ const lpTheme = EditorView.theme({
     backgroundColor: "oklch(45% 0.080 60 / 0.45)",
   },
   ".cm-gutters": {
-    backgroundColor: "oklch(11% 0.014 260)",
+    backgroundColor: "var(--bg-sunk)",
     color: "var(--fg-3)",
     border: "none",
     borderRight: "1px solid var(--rule)",
@@ -123,6 +126,34 @@ document.querySelectorAll("[data-script-editor]").forEach((mount) => {
     parent: mount,
   });
   editorViews.set(targetId, view);
+});
+
+// ---------- Read-only viewers (Details page source) ---------------
+// Same language + theme as the editor, no editing affordances.
+const viewerTheme = EditorView.theme({
+  "&": { minHeight: "0", maxHeight: "460px" },
+  ".cm-scroller": { overflow: "auto" },
+  ".cm-content": { caretColor: "transparent" },
+}, { dark: true });
+
+document.querySelectorAll("[data-script-viewer]").forEach((mount) => {
+  const src = mount.querySelector("code, pre");
+  const doc = src ? src.textContent : "";
+  mount.textContent = "";
+  new EditorView({
+    doc,
+    extensions: [
+      lineNumbers(),
+      StreamLanguage.define(powerShell),
+      lpTheme,
+      viewerTheme,
+      syntaxHighlighting(lpHighlight),
+      EditorState.readOnly.of(true),
+      EditorView.editable.of(false),
+    ],
+    parent: mount,
+  });
+  mount.classList.add("is-mounted");
 });
 
 // ---------- Platform-aware kbd hint -------------------------------

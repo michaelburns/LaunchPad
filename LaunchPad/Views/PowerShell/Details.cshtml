@@ -3,6 +3,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Mvc.Rendering
 @inject IAuthorizationService AuthorizationService
+@inject Microsoft.Extensions.Configuration.IConfiguration Config
 @model LaunchPad.ViewModels.PowerShellViewModel
 @{
     ViewBag.Title = Model.Name;
@@ -16,6 +17,11 @@
     var recurringOptions = (System.Collections.Generic.IEnumerable<SelectListItem>)ViewBag.RecurringOptions
                             ?? System.Linq.Enumerable.Empty<SelectListItem>();
     var lastJob      = recentJobs.FirstOrDefault();
+    int totalRuns    = ViewBag.TotalRuns ?? 0;
+    int successOk    = ViewBag.SuccessOk ?? 0;
+    int successTotal = ViewBag.SuccessTotal ?? 0;
+    var runTicks     = (System.Collections.Generic.List<Status>)ViewBag.RunTicks ?? new System.Collections.Generic.List<Status>();
+    var lineCount    = string.IsNullOrEmpty(Model.Script) ? 0 : Model.Script.Split('\n').Length;
 
     string statusToken(Status s) => s switch
     {
@@ -42,26 +48,63 @@
 <style>
     .details {
         display: grid;
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
         gap: var(--s-xl);
     }
+    .details > *, .ops-grid > * { min-width: 0; }
 
     .details__head {
         display: flex;
-        align-items: flex-end;
+        align-items: center;
         justify-content: space-between;
         gap: var(--s-md);
-        padding-bottom: var(--s-md);
-        border-bottom: 1px solid var(--rule);
+        flex-wrap: wrap;
     }
-    .details__title { display: flex; align-items: baseline; gap: var(--s-md); flex-wrap: wrap; }
-    .details__title h1 { font-size: var(--t-h2); letter-spacing: -0.022em; }
-    .details__title .meta {
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono-tight);
-        font-size: var(--t-meta);
-        color: var(--fg-3);
-        letter-spacing: 0;
+    .details__title { display: flex; align-items: center; gap: var(--s-md); min-width: 0; }
+    .details__icon {
+        display: grid; place-items: center;
+        width: 48px; height: 48px;
+        border-radius: 12px;
+        background: linear-gradient(160deg, var(--bg-3), var(--bg-1));
+        box-shadow: inset 0 0 0 1px var(--rule-strong), inset 0 1px 0 var(--highlight);
+        color: var(--accent);
+        flex: 0 0 auto;
+    }
+    .details__icon .i { width: 22px; height: 22px; }
+    .details__title h1 { font-size: var(--t-h1); line-height: 1.1; overflow-wrap: anywhere; }
+    .details__sub { display: flex; align-items: center; gap: 0.6em; margin-top: 0.35rem; font-size: var(--t-meta); color: var(--fg-2); flex-wrap: wrap; }
+    .tag {
+        display: inline-flex; align-items: center; gap: 0.35em;
+        height: 22px; padding: 0 0.6em;
+        border-radius: 999px;
+        background: var(--bg-2);
+        box-shadow: inset 0 0 0 1px var(--rule);
+        font-size: var(--t-micro);
+        color: var(--fg-1);
+    }
+    .tag .i { width: 12px; height: 12px; color: var(--fg-3); }
+    .details__sub .sep { color: var(--fg-3); }
+
+    /* ---------- Stat strip ---------- */
+    .stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, auto)) minmax(0, 1fr);
+        align-items: center;
+        gap: var(--s-2xl);
+        padding: var(--s-md) var(--s-lg);
+    }
+    .stat dt { font-size: var(--t-micro); color: var(--fg-3); margin-bottom: 0.15rem; }
+    .stat dd { margin: 0; font-family: var(--mono); font-variation-settings: var(--rec-mono-tight); font-size: var(--t-lead); color: var(--fg-0); white-space: nowrap; }
+    .stat dd.is-low { color: color-mix(in oklab, var(--fail) 60%, var(--fg-0)); }
+    .stat dd .status { font-size: var(--t-body); }
+    .stats__runway { justify-self: end; display: flex; flex-direction: column; align-items: flex-end; gap: 0.35rem; min-width: 0; }
+    .stats__runway .runway { height: 26px; gap: 3px; }
+    .stats__runway .runway i { width: 5px; }
+    .stats__runway small { font-size: var(--t-micro); color: var(--fg-3); }
+    @@media (max-width: 880px) {
+        .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-md); }
+        .stats .stat:first-child { grid-column: 1 / -1; }
+        .stats__runway { grid-column: 1 / -1; justify-self: start; align-items: flex-start; }
     }
     .details__actions { display: flex; gap: var(--s-xs); align-items: center; }
     .details__actions .ghost {
@@ -167,45 +210,56 @@
         grid-template-columns: 1.2fr 1fr;
         gap: var(--s-lg);
     }
-    @@media (max-width: 880px) { .ops-grid { grid-template-columns: 1fr; } }
+    @@media (max-width: 880px) { .ops-grid { grid-template-columns: minmax(0, 1fr); } }
 
     .panel-card {
         background: var(--bg-1);
         border: 1px solid var(--rule);
-        border-radius: 4px;
-        padding: var(--s-md) var(--s-lg) var(--s-lg);
+        border-radius: var(--r-lg);
+        box-shadow: inset 0 1px 0 var(--highlight);
+        padding: var(--s-lg);
+        display: flex;
+        flex-direction: column;
+    }
+    .panel-card > form { display: flex; flex-direction: column; flex: 1; }
+    .panel-card--launch {
+        background:
+            radial-gradient(120% 90% at 0% 0%, color-mix(in oklab, var(--accent) 7%, transparent), transparent 60%),
+            var(--bg-1);
+        border-color: color-mix(in oklab, var(--accent) 22%, var(--rule));
     }
     .panel-card__head {
         display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: var(--s-sm);
+        align-items: center;
+        gap: 0.75rem;
         margin-bottom: var(--s-md);
-        padding-bottom: var(--s-sm);
-        border-bottom: 1px solid var(--rule);
     }
-    .panel-card__head h3 {
-        font-size: var(--t-meta);
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
+    .panel-card__glyph {
+        display: grid; place-items: center;
+        width: 32px; height: 32px;
+        border-radius: 9px;
+        background: var(--bg-2);
+        box-shadow: inset 0 0 0 1px var(--rule);
         color: var(--fg-2);
-        font-weight: 600;
+        flex: 0 0 auto;
     }
-    .panel-card__meta {
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono-tight);
-        font-size: var(--t-meta);
-        color: var(--fg-3);
-    }
-    .panel-card__body { color: var(--fg-2); margin: 0 0 var(--s-md); font-size: var(--t-meta); }
+    .panel-card--launch .panel-card__glyph { background: color-mix(in oklab, var(--accent) 16%, var(--bg-2)); color: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent); }
+    .panel-card__head h3 { font-size: var(--t-body); font-weight: 600; letter-spacing: -0.01em; }
+    .panel-card__meta { display: block; font-size: var(--t-meta); color: var(--fg-2); }
+    .panel-card__body { color: var(--fg-2); margin: 0 0 var(--s-md); font-size: var(--t-ui); }
+    .assure { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.55rem; font-size: var(--t-meta); color: var(--fg-2); }
+    .assure li { display: flex; align-items: center; gap: 0.6rem; }
+    .assure .i { color: var(--fg-3); }
     .panel-card__actions {
         display: flex;
         align-items: center;
         gap: var(--s-md);
         flex-wrap: wrap;
-        margin-top: var(--s-md);
+        margin-top: auto;
+        padding-top: var(--s-md);
     }
-    .panel-card__actions .btn-primary { padding: 0.55em 1.1em; font-size: var(--t-ui); }
+    .panel-card__actions .btn-primary { height: 40px; padding: 0 1.3em; font-size: var(--t-body); }
+    .panel-card__actions .btn-primary .i { width: 14px; height: 14px; }
     .panel-card__actions .btn-primary[data-armed="true"] {
         background: var(--accent-deep);
         border-color: var(--accent-deep);
@@ -214,65 +268,77 @@
     }
     @@keyframes arm-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); } 50% { box-shadow: 0 0 0 6px transparent; } }
 
-    .kbd-hint {
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono-tight);
-        font-size: var(--t-meta);
-        color: var(--fg-3);
-    }
-    .kbd-hint kbd {
-        display: inline-block;
-        padding: 0.05em 0.35em;
-        font-size: 0.85em;
-        color: var(--fg-1);
-        background: var(--bg-2);
-        border: 1px solid var(--rule-strong);
-        border-radius: 3px;
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono-tight);
-    }
+    .kbd-hint { font-size: var(--t-meta); color: var(--fg-3); }
 
     /* ---------- Params form ------------------------------------- */
     .params-form { display: flex; flex-direction: column; gap: var(--s-sm); margin-bottom: var(--s-md); }
     .params-form .form-group { margin-bottom: 0; }
+    .params-form label { font-family: var(--mono); font-variation-settings: var(--rec-mono-tight); }
     .params-form .param-type {
         font-family: var(--mono);
         font-variation-settings: var(--rec-mono-tight);
-        font-size: 0.85em;
+        font-size: var(--t-micro);
         color: var(--fg-3);
         font-weight: 400;
-        text-transform: lowercase;
-        letter-spacing: 0;
-        margin-left: 0.4em;
+        margin-left: 0.5em;
+        padding: 0.05em 0.45em;
+        border-radius: 4px;
+        background: var(--bg-2);
     }
 
     /* ---------- Block sections (source / output / history) ----- */
     .block { display: flex; flex-direction: column; }
     .block__head {
         display: flex;
-        align-items: baseline;
-        justify-content: space-between;
+        align-items: center;
         gap: var(--s-sm);
-        padding: 0.5em 0 var(--s-xs);
+        padding: 0 0 var(--s-sm);
     }
     .block__head h3 {
-        font-size: var(--t-meta);
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        color: var(--fg-2);
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5em;
+        font-size: var(--t-body);
         font-weight: 600;
+        letter-spacing: -0.01em;
     }
+    .block__head h3 .i { color: var(--fg-3); }
     .block__meta {
         font-family: var(--mono);
         font-variation-settings: var(--rec-mono-tight);
-        font-size: var(--t-meta);
+        font-size: var(--t-micro);
         color: var(--fg-3);
     }
+    .block__head .block__meta:last-child { margin-left: auto; }
+
+    /* Terminal window chrome around output */
+    .term {
+        border: 1px solid var(--rule);
+        border-radius: var(--r-lg);
+        overflow: hidden;
+        background: var(--bg-sunk);
+        transition: border-color var(--dur-med) linear, box-shadow var(--dur-med) linear;
+    }
+    .term:has(.is-running) { border-color: color-mix(in oklab, var(--accent) 45%, var(--rule-strong)); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .term__bar {
+        display: flex;
+        align-items: center;
+        gap: var(--s-sm);
+        height: 40px;
+        padding: 0 var(--s-sm) 0 var(--s-md);
+        background: var(--bg-1);
+        border-bottom: 1px solid var(--rule);
+    }
+    .term__dots { display: inline-flex; gap: 6px; }
+    .term__dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--bg-3); }
+    .term__title { font-family: var(--mono); font-variation-settings: var(--rec-mono-tight); font-size: var(--t-micro); color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .term .output-block { border: none !important; border-radius: 0; }
+    .source-view.is-mounted { background: none; border: none; padding: 0; max-height: none; overflow: visible; }
 
     .source-block {
-        background: oklch(8% 0.012 260);
+        background: var(--bg-sunk);
         border: 1px solid var(--rule);
-        border-radius: 4px;
+        border-radius: var(--r-lg);
         padding: var(--s-md) var(--s-lg);
         font-family: var(--mono);
         font-variation-settings: var(--rec-mono);
@@ -287,9 +353,9 @@
         letter-spacing: 0;
     }
     .output-block {
-        background: oklch(8% 0.012 260);
+        background: var(--bg-sunk);
         border: 1px solid var(--rule);
-        border-radius: 4px;
+        border-radius: var(--r-lg);
         padding: var(--s-md) var(--s-lg);
         font-family: var(--mono);
         font-variation-settings: var(--rec-mono);
@@ -460,11 +526,12 @@
     /* Toggle in the output block head: structured | raw */
     .output-toggle {
         display: inline-flex;
-        gap: 0;
+        gap: 2px;
         margin-left: auto;
+        padding: 2px;
+        background: var(--bg-0);
         border: 1px solid var(--rule);
-        border-radius: 3px;
-        overflow: hidden;
+        border-radius: var(--r-md);
         font-family: var(--mono);
         font-variation-settings: var(--rec-mono-tight);
     }
@@ -472,14 +539,12 @@
         background: transparent;
         color: var(--fg-3);
         border: none;
-        padding: 0.15em 0.55em;
+        padding: 0.2em 0.7em;
+        border-radius: 5px;
         font: inherit;
         font-size: var(--t-micro);
-        text-transform: lowercase;
-        letter-spacing: 0;
         cursor: pointer;
     }
-    .output-toggle button + button { border-left: 1px solid var(--rule); }
     .output-toggle button:hover { color: var(--fg-1); background: var(--bg-1); }
     .output-toggle button.is-active { color: var(--fg-0); background: var(--bg-2); }
     .output-cursor {
@@ -493,19 +558,19 @@
 
     /* ---------- History table ----------------------------------- */
     .history { width: 100%; font-size: var(--t-ui); }
+    .history-wrap { overflow: hidden; }
     .history th {
         text-align: left;
-        font-family: var(--mono);
-        font-variation-settings: var(--rec-mono-tight);
-        font-size: var(--t-meta);
-        text-transform: lowercase;
-        letter-spacing: 0;
+        font-size: var(--t-micro);
         color: var(--fg-3);
-        font-weight: 500;
-        padding: var(--s-xs) var(--s-md) var(--s-xs) 0;
-        border-bottom: 1px solid var(--rule-strong);
+        font-weight: 550;
+        padding: 0.65rem var(--s-md) 0.65rem 0;
+        border-bottom: 1px solid var(--rule);
+        background: color-mix(in oklab, var(--bg-2) 40%, transparent);
         white-space: nowrap;
     }
+    .history th:first-child, .history td:first-child { padding-left: var(--s-lg); }
+    .history th:last-child, .history td:last-child { padding-right: var(--s-md); }
     .history td {
         padding: 0.7em var(--s-md) 0.7em 0;
         border-bottom: 1px solid var(--rule);
@@ -513,7 +578,7 @@
         color: var(--fg-1);
     }
     .history tbody tr:last-child td { border-bottom-color: transparent; }
-    .history .col-user { font-family: var(--mono); font-variation-settings: var(--rec-mono-tight); color: var(--fg-2); font-size: var(--t-ui); }
+    .history .col-user { color: var(--fg-1); font-size: var(--t-ui); }
     .history .col-when { font-family: var(--mono); font-variation-settings: var(--rec-mono-tight); color: var(--fg-2); font-size: var(--t-ui); white-space: nowrap; }
     .history .col-cadence { font-family: var(--mono); font-variation-settings: var(--rec-mono-tight); color: var(--fg-1); font-size: var(--t-ui); }
     .history .col-act { text-align: right; white-space: nowrap; }
@@ -531,17 +596,18 @@
     }
     .history .col-act .toggle-output:hover { color: var(--fg-0); border-color: var(--rule); }
     .history .col-act .retry-form { display: inline-flex; margin-left: 0.4em; }
-    .history .col-act .retry-btn {
+    .history .col-act .retry-btn, .history .col-act .cancel-btn {
         font-family: var(--mono);
         font-variation-settings: var(--rec-mono-tight);
         font-size: var(--t-meta);
         color: var(--fg-2);
-        padding: 0.2em 0.55em;
+        padding: 0.2em 0.6em;
         border: 1px solid var(--rule);
         background: transparent;
-        border-radius: 3px;
+        border-radius: var(--r-sm);
         cursor: pointer;
     }
+    .history .col-act .cancel-btn:hover { color: var(--fail); border-color: color-mix(in oklab, var(--fail) 45%, var(--rule-strong)); }
     .history .col-act .retry-btn:hover { color: var(--accent); border-color: var(--accent); }
     .history .col-act .retry-btn[data-armed="true"] {
         color: oklch(15% 0.020 50);
@@ -590,19 +656,69 @@
 
 <section class="details" data-details data-script-id="@Model.Id">
 
-    <header class="details__head">
-        <div class="details__title">
-            <h1>@Model.Name</h1>
-            <span class="meta">@Model.Category?.Name</span>
-        </div>
-        @if (canAuthor)
-        {
-            <div class="details__actions">
-                <a class="ghost" asp-action="Edit" asp-route-id="@Model.Id">edit</a>
-                <a class="ghost is-danger" asp-action="Delete" asp-route-id="@Model.Id">delete</a>
+    <div>
+        <a class="backlink" href="/"><svg class="i i--sm" aria-hidden="true"><use href="#i-arrow-left"/></svg>Scripts</a>
+        <header class="details__head">
+            <div class="details__title">
+                <span class="details__icon" aria-hidden="true"><svg class="i"><use href="#i-terminal"/></svg></span>
+                <div style="min-width:0">
+                    <h1>@Model.Name</h1>
+                    <div class="details__sub">
+                        <span class="tag"><svg class="i" aria-hidden="true"><use href="#i-folder"/></svg>@(Model.Category?.Name ?? "uncategorised")</span>
+                        <span class="mono">@(Model.Name).ps1</span>
+                        <span class="sep">·</span>
+                        <span>@lineCount @(lineCount == 1 ? "line" : "lines")</span>
+                        @if (scriptParams != null && scriptParams.Count > 0)
+                        {
+                            <span class="sep">·</span>
+                            <span>@scriptParams.Count @(scriptParams.Count == 1 ? "parameter" : "parameters")</span>
+                        }
+                    </div>
+                </div>
             </div>
-        }
-    </header>
+            @if (canAuthor)
+            {
+                <div class="details__actions page-head__actions">
+                    <a class="btn" asp-action="Edit" asp-route-id="@Model.Id"><svg class="i" aria-hidden="true"><use href="#i-edit"/></svg>Edit</a>
+                    <a class="btn btn-danger" asp-action="Delete" asp-route-id="@Model.Id" aria-label="Delete @Model.Name" title="Delete"><svg class="i" aria-hidden="true"><use href="#i-trash"/></svg></a>
+                </div>
+            }
+        </header>
+    </div>
+
+    <dl class="stats surface">
+        <div class="stat">
+            <dt>Last run</dt>
+            <dd>
+                @if (runningJob != null) { <span class="status" data-state="running">running now</span> }
+                else if (lastJob != null) { <span class="status" data-state="@statusToken(lastJob.Status)">@statusLabel(lastJob.Status) · @ago(lastJob.Date)</span> }
+                else { <span class="faint">never</span> }
+            </dd>
+        </div>
+        <div class="stat">
+            <dt>Total runs</dt>
+            <dd data-numeric>@totalRuns.ToString("N0")</dd>
+        </div>
+        <div class="stat">
+            <dt>Success rate</dt>
+            @if (successTotal > 0)
+            {
+                var pct = successOk * 100 / successTotal;
+                <dd data-numeric class="@(pct < 90 ? "is-low" : "")" title="@successOk of the last @successTotal finished runs">@pct%</dd>
+            }
+            else
+            {
+                <dd class="faint">—</dd>
+            }
+        </div>
+        <div class="stats__runway">
+            <span class="runway" aria-hidden="true">
+                @for (var k = 0; k < Math.Max(0, 32 - runTicks.Count); k++) { <i data-s="empty"></i> }
+                @foreach (var t in runTicks) { <i data-s="@statusToken(t)"></i> }
+            </span>
+            <small>last @Math.Min(32, runTicks.Count) runs, oldest to newest</small>
+        </div>
+    </dl>
 
     <div class="running-strip" data-running-strip @(runningJob != null ? "" : "hidden")>
         <span class="pulse" aria-hidden="true"></span>
@@ -638,10 +754,13 @@
     @if (canLaunch)
     {
         <div class="ops-grid">
-            <article class="panel-card">
+            <article class="panel-card panel-card--launch">
                 <header class="panel-card__head">
-                    <h3>launch</h3>
-                    <span class="panel-card__meta">runs immediately on this host</span>
+                    <span class="panel-card__glyph" aria-hidden="true"><svg class="i"><use href="#i-play"/></svg></span>
+                    <div>
+                        <h3>Launch now</h3>
+                        <span class="panel-card__meta">Runs immediately on @(Config["LaunchPad:HostLabel"] ?? Environment.MachineName)</span>
+                    </div>
                 </header>
 
                 @if (scriptParams != null && scriptParams.Count > 0)
@@ -662,8 +781,8 @@
                             }
                         </div>
                         <div class="panel-card__actions">
-                            <button type="submit" class="btn btn-primary" data-launch-btn data-arm-btn data-armed-label="confirm launch ›">launch ›</button>
-                            <span class="kbd-hint">press <kbd>r</kbd> twice to confirm</span>
+                            <button type="submit" class="btn btn-primary" data-launch-btn data-arm-btn data-armed-label="Click again to confirm">Launch<svg class="i i--fill" aria-hidden="true"><use href="#i-play"/></svg></button>
+                            <span class="kbd-hint">or press <kbd>r</kbd> <kbd>r</kbd></span>
                         </div>
                     </form>
                 }
@@ -671,10 +790,15 @@
                 {
                     <form method="post" asp-action="Run" asp-controller="PowerShell" asp-route-id="@Model.Id" data-launch-form data-arm-form>
                         @Html.AntiForgeryToken()
-                        <p class="panel-card__body">No parameters required. Launch executes the script as-is.</p>
+                        <p class="panel-card__body">This script takes no parameters. It runs exactly as written.</p>
+                        <ul class="assure">
+                            <li><svg class="i i--sm" aria-hidden="true"><use href="#i-terminal"/></svg>Output streams live into the panel below</li>
+                            <li><svg class="i i--sm" aria-hidden="true"><use href="#i-history"/></svg>Every run is recorded with your name in History</li>
+                            <li><svg class="i i--sm" aria-hidden="true"><use href="#i-shield"/></svg>You'll be asked to confirm before it starts</li>
+                        </ul>
                         <div class="panel-card__actions">
-                            <button type="submit" class="btn btn-primary" data-launch-btn data-arm-btn data-armed-label="confirm launch ›">launch ›</button>
-                            <span class="kbd-hint">press <kbd>r</kbd> twice to confirm</span>
+                            <button type="submit" class="btn btn-primary" data-launch-btn data-arm-btn data-armed-label="Click again to confirm">Launch<svg class="i i--fill" aria-hidden="true"><use href="#i-play"/></svg></button>
+                            <span class="kbd-hint">or press <kbd>r</kbd> <kbd>r</kbd></span>
                         </div>
                     </form>
                 }
@@ -682,8 +806,11 @@
 
             <article class="panel-card">
                 <header class="panel-card__head">
-                    <h3>schedule</h3>
-                    <span class="panel-card__meta">queue for later, or recur</span>
+                    <span class="panel-card__glyph" aria-hidden="true"><svg class="i"><use href="#i-calendar"/></svg></span>
+                    <div>
+                        <h3>Schedule</h3>
+                        <span class="panel-card__meta">Run once later, or on a repeating cadence</span>
+                    </div>
                 </header>
                 <form method="post" asp-action="Schedule" asp-controller="PowerShell">
                     @Html.AntiForgeryToken()
@@ -709,7 +836,7 @@
                     }
 
                     <div class="form-group">
-                        <label for="schedDate">when</label>
+                        <label for="schedDate">When</label>
                         <input id="schedDate" name="Date" type="datetime-local" required />
                         @{
                             var tz = TimeZoneInfo.Local;
@@ -720,7 +847,7 @@
                         <span class="form-hint">server time · UTC@(sign)@(offsetHours) · @abbr</span>
                     </div>
                     <div class="form-group">
-                        <label for="schedRecur">recurring</label>
+                        <label for="schedRecur">Repeat</label>
                         <select id="schedRecur" name="SelectedRecurring" data-lp-select>
                             <option value="">never</option>
                             @foreach (var opt in recurringOptions)
@@ -730,7 +857,7 @@
                         </select>
                     </div>
                     <div class="panel-card__actions">
-                        <button type="submit" class="btn">schedule ›</button>
+                        <button type="submit" class="btn"><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg>Schedule</button>
                     </div>
                 </form>
             </article>
@@ -739,15 +866,7 @@
 
     <section class="block">
         <header class="block__head">
-            <h3>source</h3>
-            <span class="block__meta">@(Model.Name + ".ps1") · read-only</span>
-        </header>
-        <pre class="source-block"><code>@Model.Script</code></pre>
-    </section>
-
-    <section class="block">
-        <header class="block__head">
-            <h3>output</h3>
+            <h3><svg class="i" aria-hidden="true"><use href="#i-terminal"/></svg>Output</h3>
             <span class="block__meta" data-output-meta>
                 @if (runningJob != null)
                 {
@@ -774,22 +893,29 @@
             var emptyClass = string.IsNullOrEmpty(initialOutput) ? " is-empty" : "";
             var runningClass = runningJob != null ? " is-running" : "";
         }
-        <div class="output-block@(emptyClass)@(runningClass)" data-output data-output-raw="@System.Net.WebUtility.HtmlEncode(initialOutput)"></div>
+        <div class="term">
+            <div class="term__bar">
+                <span class="term__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span class="term__title">pwsh · @(Model.Name).ps1</span>
+            </div>
+            <div class="output-block@(emptyClass)@(runningClass)" data-output data-output-raw="@initialOutput"></div>
+        </div>
     </section>
 
     <section class="block">
         <header class="block__head">
-            <h3>history</h3>
+            <h3><svg class="i" aria-hidden="true"><use href="#i-history"/></svg>History</h3>
             <span class="block__meta" data-history-meta>
                 <span data-numeric>@recentJobs.Count</span> recent runs
             </span>
         </header>
+        <div class="surface history-wrap">
         <table class="history" data-history>
             <thead>
                 <tr>
-                    <th>user</th>
-                    <th>started</th>
-                    <th>status</th>
+                    <th>Run by</th>
+                    <th>Started</th>
+                    <th>Status</th>
                     <th></th>
                 </tr>
             </thead>
@@ -832,21 +958,31 @@
                 }
             </tbody>
         </table>
+        </div>
+    </section>
+
+    <section class="block">
+        <header class="block__head">
+            <h3><svg class="i" aria-hidden="true"><use href="#i-code"/></svg>Source</h3>
+            <span class="block__meta">@(Model.Name + ".ps1") · read-only</span>
+        </header>
+        <div class="source-block source-view" data-script-viewer><pre><code>@Model.Script</code></pre></div>
     </section>
 
     @if (recurringJobs.Any())
     {
         <section class="block">
             <header class="block__head">
-                <h3>recurring</h3>
+                <h3><svg class="i" aria-hidden="true"><use href="#i-repeat"/></svg>Recurring</h3>
                 <span class="block__meta">jobs that repeat on a schedule</span>
             </header>
+            <div class="surface history-wrap">
             <table class="history">
                 <thead>
                     <tr>
-                        <th>user</th>
-                        <th>scheduled</th>
-                        <th>cadence</th>
+                        <th>Set by</th>
+                        <th>Scheduled</th>
+                        <th>Cadence</th>
                         <th></th>
                     </tr>
                 </thead>
@@ -861,14 +997,19 @@
                                 <form class="cancel-form" method="post" asp-action="CancelJob" asp-controller="PowerShell" data-arm-form>
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="Id" value="@r.Id" />
-                                    <button type="submit" data-arm-btn data-armed-label="confirm cancel">cancel</button>
+                                    <button type="submit" class="cancel-btn" data-arm-btn data-armed-label="confirm cancel">cancel</button>
                                 </form>
                             </td>
                         </tr>
                     }
                 </tbody>
             </table>
+            </div>
         </section>
     }
 
 </section>
+
+@section Scripts {
+    <script type="module" src="~/lib/codemirror/ps-editor.bundle.js" asp-append-version="true"></script>
+}

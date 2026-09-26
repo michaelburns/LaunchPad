@@ -36,6 +36,22 @@ namespace LaunchPad.Controllers
                 .ToList();
             ViewBag.EmptyCategories = emptyCategoryIds.Count;
 
+            // Access matrix: every user against every category, plus script counts per category.
+            ViewBag.MatrixUsers = _context.Users
+                .Include(u => u.UserRoles).ThenInclude(r => r.Role)
+                .Include(u => u.Categories)
+                .OrderBy(u => u.Username)
+                .ToList();
+            ViewBag.MatrixCategories = _context.Categories
+                .OrderBy(c => c.Name)
+                .Select(c => new CategoryCount
+                {
+                    Id = c.Id,
+                    Name = c.Name,
+                    Scripts = _context.Scripts.Count(s => s.Category != null && s.Category.Id == c.Id && !s.Name.StartsWith("_"))
+                })
+                .ToList();
+
             return View();
         }
 
@@ -302,5 +318,12 @@ namespace LaunchPad.Controllers
             TempData["AdminNotice"] = $"Category '{category.Name}' deleted.";
             return RedirectToAction("CategoryList");
         }
+    }
+
+    public class CategoryCount
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public int Scripts { get; set; }
     }
 }
