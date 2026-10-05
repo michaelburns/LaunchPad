@@ -1,4 +1,3 @@
-using AutoMapper;
 using Hangfire;
 using Hangfire.Storage.SQLite;
 using LaunchPad.Data;
@@ -15,8 +14,6 @@ var hangfireConnection = builder.Configuration.GetConnectionString("HangfireConn
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite(defaultConnection));
-
-builder.Services.AddAutoMapper(typeof(MappingProfile));
 
 builder.Services.AddControllersWithViews();
 

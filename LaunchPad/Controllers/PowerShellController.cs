@@ -1,4 +1,3 @@
-﻿using AutoMapper;
 using Hangfire;
 using LaunchPad.Data;
 using LaunchPad.Models;
@@ -19,13 +18,11 @@ namespace LaunchPad.Controllers
     {
         private IScriptRepository _scriptRepository;
         private IScriptIO _scriptIO;
-        private IMapper _mapper;
 
-        public PowerShellController(IScriptRepository scriptRepository, IScriptIO scriptIO, IMapper mapper, ApplicationDbContext context) : base(context)
+        public PowerShellController(IScriptRepository scriptRepository, IScriptIO scriptIO, ApplicationDbContext context) : base(context)
         {
             _scriptRepository = scriptRepository;
             _scriptIO = scriptIO;
-            _mapper = mapper;
         }
 
         // GET: /PowerShell — the script roster is now rendered by HomeController.Index.
@@ -64,7 +61,7 @@ namespace LaunchPad.Controllers
                 return View(newScript);
             }
 
-            var script = _mapper.Map<PowerShellViewModel, Script>(newScript);
+            var script = newScript.ToScript();
             script.Author = User.Identity.Name;
 
             if (TryValidateModel(script))
@@ -90,7 +87,7 @@ namespace LaunchPad.Controllers
             if (script == null) { return RedirectToAction("Index"); }
             if (!UserHasAccessToCategory(script.Category.Id)) { return RedirectToAction("Index"); }
 
-            var scriptView = _mapper.Map<Script, PowerShellViewModel>(script);
+            var scriptView = script.ToViewModel();
             scriptView.Script = _scriptIO.Read(script.Name);
 
             ViewBag.Categories = new SelectList(_scriptRepository.GetCategories().ToList(), "Id", "Name", script.Category?.Id);
@@ -131,7 +128,7 @@ namespace LaunchPad.Controllers
             if (script == null) { return RedirectToAction("Index"); }
             if (script.Category != null && !UserHasAccessToCategory(script.Category.Id)) { return RedirectToAction("Index"); }
 
-            var scriptView = _mapper.Map<Script, PowerShellViewModel>(script);
+            var scriptView = script.ToViewModel();
             scriptView.Script = _scriptIO.Read(script.Name);
 
             var jobs = _scriptRepository.GetJobs()
